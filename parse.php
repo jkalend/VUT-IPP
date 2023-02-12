@@ -9,6 +9,7 @@ function addXML($xml, $name, $order, $args) {
     $xml_in->addAttribute('order', $order);
     $xml_in->addAttribute('opcode', $name);
     foreach ($args as $i => $arg) {
+        $arg = preg_replace('/&/', '&amp;', $arg);
         $xml_arg = $xml_in->addChild('arg' . ($i + 1), $arg['value']);
         $xml_arg->addAttribute('type', $arg['type']);
     }
