@@ -1,6 +1,6 @@
 <?php
 function usage() {
-    fwrite(STDERR ,"Usage: parse.php [--help] [--stats=file] [--loc] [--comments] [--labels] [--jumps] [--insts] [--vars] [--stack] [--input=file]\n");
+    fwrite(STDERR ,"Usage: parse.php [--help]\n  Accepts file contents on stdin and outputs XML to stdout.\n");
     exit(0);
 }
 
@@ -13,7 +13,6 @@ function addXML($xml, $name, $order, $args) {
         $xml_arg = $xml_in->addChild('arg' . ($i + 1), $arg['value']);
         $xml_arg->addAttribute('type', $arg['type']);
     }
-    return $xml;
 }
 
 function parseArg($arg) {
@@ -125,10 +124,9 @@ if ($rest_index > 2) {
     exit(1);
 }
 if (isset($options['help'])) {
-    fwrite(STDOUT ,"HELP ME\n");
-    exit(0);
+    usage();
 } elseif ($rest_index != 1) {
-    fwrite(STDERR ,"Invalid argument\n");
+    fwrite(STDERR ,"Invalid CLI argument\n");
     exit(1);
 }
 
@@ -140,10 +138,7 @@ while (true) {
         exit(21);
     }
     $line = trim(fgets(STDIN));
-    if (strlen($line) == 0) {
-        continue;
-    }
-    if (preg_match('/^#/', $line)) {
+    if (strlen($line) == 0 || preg_match('/^#/', $line)) {
         continue;
     }
 
@@ -180,10 +175,7 @@ $xml = new SimpleXMLElement($out);
 
 while ($line = fgets(STDIN)) {
     $line = trim($line);
-    if (strlen($line) == 0) {
-        continue;
-    }
-    if (preg_match('/^#/', $line)) {
+    if (strlen($line) == 0 || preg_match('/^#/', $line)) {
         continue;
     }
 
@@ -271,10 +263,5 @@ while ($line = fgets(STDIN)) {
         exit(22);
     }
 }
-
 echo $xml->asXML();
-
-
-
 ?>
-
