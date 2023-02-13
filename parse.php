@@ -53,8 +53,8 @@ function parseArg($arg) {
         }
     } elseif (preg_match('/^(int|bool|string)$/', $arg)) {
         return ['type' => 'type', 'value' => $arg];
-    } elseif (preg_match('/^[a-zA-Z0-9_$&%*!?-]*$/', $arg)) {
-        if (preg_match('/^[a-zA-Z0-9_$&%*!?-]*$/', $arg)) {
+    } elseif (preg_match('/^([a-zA-Z]|[_$&%*!?-])[a-zA-Z0-9_$&%*!?-]*$/', $arg)) {
+        if (preg_match('/^([a-zA-Z]|[_$&%*!?-])[a-zA-Z0-9_$&%*!?-]*$/', $arg)) {
             return ['type' => 'label', 'value' => $arg];
         } else {
             fwrite(STDERR ,"Invalid argument\n");
