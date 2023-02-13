@@ -1,6 +1,7 @@
 import sys
 import xml.etree.ElementTree as ET
 import argparse
+import re
 
 
 class ArgumentParser:
@@ -87,6 +88,7 @@ class Interpret:
                 in_data = file.read()
                 if in_data == '':
                     return "nil"
+                return in_data
         else:
             try:
                 in_data = input()
@@ -95,7 +97,9 @@ class Interpret:
                 return "nil"
 
     def process_output(self, var):
-        if var.type == 'string' or var.type == 'int':
+        if var.type == 'string':
+            print(self.parse_string(var.value), end='')
+        elif var.type == 'int':
             print(var.value, end='')
         elif var.type == 'bool':
             if var.value:
@@ -136,6 +140,11 @@ class Interpret:
                 var = instruction.args[0].text
                 vars[var] = None
         return vars
+
+    def parse_string(self, string):
+        while re.match(r'.*\\[0-9]{3}.*', string):
+            string = re.sub(r'\\([0-9]{3})', lambda x: chr(int(x.group(1))), string)
+        return string
 
     def _init_operations(self):
         return {
@@ -227,7 +236,7 @@ class Interpret:
             dest.value = arg.text == 'true'
             dest.type = 'bool'
         elif arg.attrib['type'] == 'string':
-            dest.value = arg.text
+            dest.value = self.parse_string(arg.text)
             dest.type = 'string'
         elif arg.attrib['type'] == 'nil':
             dest.value = "nil"
@@ -263,7 +272,7 @@ class Interpret:
     def return_(self, instruction):
         if len(self.call_stack) == 0:
             exit(56)
-        self.current = iter(self.instructions[self.call_stack.pop().index:])
+        self.current = self.call_stack.pop()
 
     def pushs(self, instruction):
         arg = instruction.args[0].attrib['type']
@@ -277,7 +286,7 @@ class Interpret:
         elif arg == 'bool':
             self.data_stack.append(Variable(value=instruction.args[0].text == 'true', type='bool'))
         elif arg == 'string':
-            self.data_stack.append(Variable(value=instruction.args[0].text, type='string'))
+            self.data_stack.append(Variable(value=self.parse_string(instruction.args[0].text), type='string'))
         elif arg == 'nil':
             self.data_stack.append(Variable(value="nil", type='nil'))
         else:
@@ -371,7 +380,7 @@ class Interpret:
             elif i.attrib['type'] == 'bool':
                 arg.append(Variable(value=bool(i.text), type='bool'))
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=str(i.text), type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             else:
                 exit(53)
 
@@ -394,7 +403,7 @@ class Interpret:
             elif i.attrib['type'] == 'bool':
                 arg.append(Variable(value=bool(i.text), type='bool'))
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=str(i.text), type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             else:
                 exit(53)
 
@@ -417,7 +426,7 @@ class Interpret:
             elif i.attrib['type'] == 'bool':
                 arg.append(Variable(value=bool(i.text), type='bool'))
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=str(i.text), type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'nil':
                 arg.append(Variable(value="nil", type='nil'))
             else:
@@ -513,7 +522,7 @@ class Interpret:
             var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
             arg.append(var) if var.type == "string" else exit(53)
         elif instruction.args[1].attrib['type'] == 'string':
-            arg.append(Variable(value=instruction.args[1].text, type='string'))
+            arg.append(Variable(value=self.parse_string(instruction.args[1].text), type='string'))
         else:
             exit(53)
 
@@ -553,7 +562,7 @@ class Interpret:
             dest.type = 'bool'
             return dest.value
         elif instruction.args[1].text == 'string':
-            dest.value = in_data
+            dest.value = self.parse_string(in_data)
             dest.type = 'string'
             return dest.value
 
@@ -567,7 +576,7 @@ class Interpret:
             elif i.attrib['type'] == 'bool':
                 self.process_output(Variable(value=self.__process_bool(i.text), type='bool'))
             elif i.attrib['type'] == 'string':
-                self.process_output(Variable(value=i.text, type='string'))
+                self.process_output(Variable(value=self.parse_string(i.text), type='string'))
             else:
                 exit(53)
 
@@ -579,7 +588,7 @@ class Interpret:
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
                 arg.append(var) if var.type == "string" else exit(53)
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=i.text, type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             else:
                 exit(53)
 
@@ -595,7 +604,7 @@ class Interpret:
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
                 arg.append(var) if var.type == "string" else exit(53)
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=i.text, type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             else:
                 exit(53)
 
@@ -610,7 +619,7 @@ class Interpret:
             var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
             arg.append(var) if var.type == "string" else exit(53)
         elif instruction.args[1].attrib['type'] == 'string':
-            arg.append(Variable(value=instruction.args[1].text, type='string'))
+            arg.append(Variable(value=self.parse_string(instruction.args[1].text), type='string'))
         else:
             exit(53)
 
@@ -638,7 +647,7 @@ class Interpret:
             var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
             arg.append(var) if var.type == "int" else exit(53)
         elif instruction.args[1].attrib['type'] == 'int':
-            arg.append(Variable(value=instruction.args[1].text, type='int'))
+            arg.append(Variable(value=self.int(instruction.args[1].text), type='int'))
         else:
             exit(53)
 
@@ -646,7 +655,7 @@ class Interpret:
             var = self._get_frame(instruction.args[2].text.split('@')[0]).get(instruction.args[2].text.split('@')[1])
             arg.append(var) if var.type == "string" else exit(53)
         elif instruction.args[2].attrib['type'] == 'string':
-            arg.append(Variable(value=self.int(instruction.args[2].text), type='string'))
+            arg.append(Variable(value=self.parse_string(instruction.args[2].text), type='string'))
         else:
             exit(53)
 
@@ -665,11 +674,11 @@ class Interpret:
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
                 arg.append(var)
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=i.text, type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int':
-                arg.append(Variable(value=i.text, type='int'))
+                arg.append(Variable(value=self.int(i.text), type='int'))
             elif i.attrib['type'] == 'bool':
-                arg.append(Variable(value=i.text, type='bool'))
+                arg.append(Variable(value=self.__process_bool(i.text), type='bool'))
             else:
                 exit(53)
 
@@ -694,7 +703,7 @@ class Interpret:
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
                 arg.append(var)
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=i.text, type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int':
                 arg.append(Variable(value=self.int(i.text), type='int'))
             elif i.attrib['type'] == 'bool':
@@ -721,7 +730,7 @@ class Interpret:
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
                 arg.append(var)
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=i.text, type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int':
                 arg.append(Variable(value=self.int(i.text), type='int'))
             elif i.attrib['type'] == 'bool':
@@ -762,7 +771,7 @@ class Interpret:
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
                 arg.append(var)
             elif i.attrib['type'] == 'string':
-                arg.append(Variable(value=i.text, type='string'))
+                arg.append(Variable(value=self.parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int':
                 arg.append(Variable(value=self.int(i.text), type='int'))
             elif i.attrib['type'] == 'bool':
@@ -797,11 +806,6 @@ class Instruction:
         self.args = self._get_args(instruction)
         self.index = int(instruction.attrib['order']) - 1
 
-    def _get_arg(self, instruction, arg):
-        arg = instruction.find(arg)
-        if arg is not None:
-            return arg
-
     def _get_args(self, instruction):
         if int(instruction.attrib['order']) < 1:
             exit(32)
@@ -812,31 +816,6 @@ class Instruction:
             if arg is not None:
                 args.append(arg)
         return args
-
-    def _get_arg_types(self, instruction):
-        arg_types = []
-        for arg in ['arg1', 'arg2', 'arg3']:
-            arg_type = instruction.find(arg)
-            if arg_type is not None:
-                arg_types.append(arg_type.attrib['type'])
-        return arg_types
-
-    def _check_args(self, instruction, arg_types):
-        args = self._get_arg_types(instruction)
-        if len(args) != len(arg_types):
-            return False
-        for arg, arg_type in zip(args, arg_types):
-            if arg != arg_type:
-                return False
-        return True
-
-    def _check_arg(self, instruction, arg, arg_type):
-        args = self._get_arg_types(instruction)
-        if len(args) != 1:
-            return False
-        if args[0] != arg_type:
-            return False
-        return True
 
 
 class Frame:
