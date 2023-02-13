@@ -18,7 +18,7 @@ function addXML($xml, $name, $order, $args) {
 function parseArg($arg) {
     if (preg_match('/^int@/', $arg)) {
         $arg = preg_replace('/^int@/', '', $arg);
-        if (preg_match('/^[-+]?[0-9]+$/', $arg)) {
+        if (preg_match('/^[-+]?(([0-9]+)|(0x[0-9a-fA-F]+)|(0o[1-7]+))$/', $arg)) {
             return ['type' => 'int', 'value' => $arg];
         } else {
             fwrite(STDERR ,"Invalid argument\n");
