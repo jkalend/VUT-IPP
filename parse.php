@@ -17,7 +17,7 @@ function addXML($xml, $name, $order, $args) {
 function parseArg($arg) {
     if (preg_match('/^int@/', $arg)) {
         $arg = preg_replace('/^int@/', '', $arg);
-        if (preg_match('/^[-+]?(([0-9]+)|(0x[0-9a-fA-F]+)|(0o[1-7]+))$/', $arg)) {
+        if (preg_match('/^[-+]?((0|([1-9][0-9]*(_[0-9]+)*))|(0[xX][0-9a-fA-F]+(_[0-9a-fA-F]+)*)|(0[oO]?[0-7]+(_[0-7]+)*))$/', $arg)) {
             return ['type' => 'int', 'value' => $arg];
         }
     } elseif (preg_match('/^bool@/', $arg)) {
@@ -186,7 +186,7 @@ while ($line = fgets(STDIN)) {
         addXML($xml, $instr, $order, $args);
     } elseif ($instr == ".IPPCODE23") {
         fwrite(STDERR ,"Invalid additional header\n");
-        exit(21);
+        exit(22);
     } else {
         fwrite(STDERR ,"Invalid instruction\n");
         exit(22);

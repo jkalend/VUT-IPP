@@ -217,9 +217,9 @@ class Interpret:
         :param value: value to be processed
         :return: processed value as int
         """
-        if value.startswith("0x"):
+        if re.match(r'^[+-]?0[Xx]', value):
             return int(value, 16)
-        elif value.startswith("0o"):
+        elif re.match(r'^[+-]?0[Oo]?', value):
             return int(value, 8)
         else:
             try:
