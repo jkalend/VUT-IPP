@@ -13,12 +13,10 @@ class ArgumentParser:
                                               description='Interprets XML code made by parse.php'
                                                           ' and outputs the result to stdout',
                                               epilog='At least one of the arguments --source or --input must be present'
-                                                     ' (Jan Kalenda 2023)',
-                                              add_help=False
+                                                     ' (Jan Kalenda 2023)'
                                               )
         self.parser.add_argument('--source', nargs="?", type=str, help='Source file')
         self.parser.add_argument('--input', nargs="?", type=str, help='Input file')
-        self.parser.add_argument('--help', action='help', help='Prints this help')
 
     def parse(self) -> argparse.Namespace:
         """Parses arguments from command line
@@ -181,14 +179,10 @@ class Interpret:
         """
         if self.input is not None:
             with open(self.input, 'r') as file:
-                in_data = file.read()
-                if in_data == '':
-                    return "nil"
-                return in_data
+                return in_data if (in_data := file.read()) != '' else "nil"
         else:
             try:
-                in_data = input()
-                return in_data
+                return input()
             except EOFError:
                 return "nil"
 
@@ -215,10 +209,7 @@ class Interpret:
         :param value: value to be processed
         :return: processed value as bool
         """
-        if value == 'true':
-            return True
-        else:
-            return False
+        return True if value == 'true' else False
 
     def int(self, value: str) -> int:
         """Processes int value
@@ -245,9 +236,7 @@ class Interpret:
         for instruction in self.instructions:
             if instruction.opcode == 'LABEL':
                 label = instruction.args[0].text
-                if label in labels:
-                    exit(52)
-                labels[label] = instruction
+                labels[label] = instruction if label not in labels else exit(52)
         return labels
 
     def parse_string(self, string: str) -> str:
@@ -333,7 +322,7 @@ class Interpret:
         arg = instruction.args[1]
         if arg.attrib['type'] == 'var':
             var = self._get_frame(arg.text.split('@')[0]).get(arg.text.split('@')[1])
-            if var.value is None:
+            if var.type == "":
                 exit(56)
             dest.value = var.value
             dest.type = var.type
@@ -341,13 +330,13 @@ class Interpret:
             dest.value = self.int(arg.text)
             dest.type = 'int'
         elif arg.attrib['type'] == 'bool':
-            dest.value = arg.text == 'true'
+            dest.value = self.__process_bool(arg.text)
             dest.type = 'bool'
         elif arg.attrib['type'] == 'string':
             dest.value = self.parse_string(arg.text)
             dest.type = 'string'
         elif arg.attrib['type'] == 'nil':
-            dest.value = "nil"
+            dest.value = 'nil'
             dest.type = 'nil'
         else:
             exit(53)
@@ -361,9 +350,7 @@ class Interpret:
 
         Exits with 55 if temporary frame is not defined
         """
-        if self.temporary_frame is None:
-            exit(55)
-        self.frame_stack.append(self.temporary_frame)
+        self.frame_stack.append(self.temporary_frame) if self.temporary_frame is not None else exit(55)
         self.temporary_frame = None
 
     def popframe(self, instruction: Instruction) -> None:
@@ -405,20 +392,8 @@ class Interpret:
 
         Exits with 56 if variable is not defined
         """
-        arg = instruction.args[0].attrib['type']
-        if arg == 'var':
-            var = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
-            self.data_stack.append(var) if var.type != "" else exit(56)
-        elif arg == 'int':
-            self.data_stack.append(Variable(value=self.int(instruction.args[0].text), type='int'))
-        elif arg == 'bool':
-            self.data_stack.append(Variable(value=self.__process_bool(instruction.args[0].text), type='bool'))
-        elif arg == 'string':
-            self.data_stack.append(Variable(value=self.parse_string(instruction.args[0].text), type='string'))
-        elif arg == 'nil':
-            self.data_stack.append(Variable(value="nil", type='nil'))
-        else:
-            exit(53)
+        arg = self.instruction_args(instruction, "isbn", first=True)[0]
+        self.data_stack.append(arg)
 
     def pops(self, instruction: Instruction) -> None:
         """Pops value from data stack and stores it in variable
@@ -426,10 +401,8 @@ class Interpret:
         Exits with 56 if data stack is empty
         """
         var = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
-        if len(self.data_stack) == 0:
-            exit(56)
 
-        popped = self.data_stack.pop()
+        popped = self.data_stack.pop() if len(self.data_stack) > 0 else exit(56)
         var.value = popped.value
         var.type = popped.type
 
@@ -475,10 +448,7 @@ class Interpret:
         dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         arg = self.instruction_args(instruction, "i")
 
-        if arg[1].value == 0:
-            exit(57)
-
-        dest.value = arg[0].value // arg[1].value
+        dest.value = arg[0].value // arg[1].value if arg[1].value != 0 else exit(57)
         dest.type = 'int'
 
     def lt(self, instruction: Instruction) -> None:
@@ -792,17 +762,12 @@ class Interpret:
 
         Exits with 57 if value is not in range 0-49
         """
-        arg = self.instruction_args(instruction, "i")
-
-        if arg[0].value < 0 or arg[0].value > 49:
-            exit(57)
-
-        exit(arg[0].value)
+        arg = self.instruction_args(instruction, "i", first=True)
+        exit(arg[0].value) if 0 <= arg[0].value <= 49 else exit(57)
 
     def dprint(self, instruction: Instruction) -> None:
         """Prints value to stderr"""
-        arg = self.instruction_args(instruction, "isbn", first=True)
-        print(arg[0].value, file=sys.stderr)
+        print(self.instruction_args(instruction, "isbn", first=True)[0].value, file=sys.stderr)
 
     def break_(self, instruction: Instruction) -> None:
         """Prints debug information"""
@@ -836,7 +801,9 @@ class Interpret:
         for i in instruction.args[start:]:
             if i.attrib['type'] == 'var':
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
-                arg.append(var) if var.type != limit else exit(56)
+                if var.type == "":
+                    exit(56)
+                arg.append(var) if var.type == limit or limit == "" else exit(56)
             elif i.attrib['type'] == 'string' and 's' in options:
                 arg.append(Variable(value=self.parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int' and 'i' in options:

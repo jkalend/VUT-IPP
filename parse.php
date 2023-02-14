@@ -1,7 +1,6 @@
 <?php
 function usage() {
     fwrite(STDERR ,"Usage: parse.php [--help]\n  Accepts file contents on stdin and outputs XML to stdout.\n");
-    exit(0);
 }
 
 function addXML($xml, $name, $order, $args) {
@@ -20,25 +19,16 @@ function parseArg($arg) {
         $arg = preg_replace('/^int@/', '', $arg);
         if (preg_match('/^[-+]?(([0-9]+)|(0x[0-9a-fA-F]+)|(0o[1-7]+))$/', $arg)) {
             return ['type' => 'int', 'value' => $arg];
-        } else {
-            fwrite(STDERR ,"Invalid argument\n");
-            exit(23);
         }
     } elseif (preg_match('/^bool@/', $arg)) {
         $arg = preg_replace('/^bool@/', '', $arg);
         if (preg_match('/^(true|false)$/', $arg)) {
             return ['type' => 'bool', 'value' => $arg];
-        } else {
-            fwrite(STDERR ,"Invalid argument\n");
-            exit(23);
         }
     } elseif (preg_match('/^string@/', $arg)) {
         $arg = preg_replace('/^string@/', '', $arg);
         if (preg_match('/^([^#\\\]|(\\\\[0-9]{3}))*$/', $arg)) {
             return ['type' => 'string', 'value' => $arg];
-        } else {
-            fwrite(STDERR ,"Invalid argument\n");
-            exit(23);
         }
     } elseif (preg_match('/^nil@nil$/', $arg)) {
         return ['type' => 'nil', 'value' => 'nil'];
@@ -47,87 +37,62 @@ function parseArg($arg) {
         $arg = preg_replace('/^(GF|LF|TF)@/', '', $arg);
         if (preg_match('/^([a-zA-Z]|[_$&%*!?-])[a-zA-Z0-9_$&%*!?-]*$/', $arg)) {
             return ['type' => 'var', 'value' => $pre[0] . "@" . $arg];
-        } else {
-            fwrite(STDERR ,"Invalid argument\n");
-            exit(23);
         }
     } elseif (preg_match('/^(int|bool|string)$/', $arg)) {
         return ['type' => 'type', 'value' => $arg];
     } elseif (preg_match('/^([a-zA-Z]|[_$&%*!?-])[a-zA-Z0-9_$&%*!?-]*$/', $arg)) {
         if (preg_match('/^([a-zA-Z]|[_$&%*!?-])[a-zA-Z0-9_$&%*!?-]*$/', $arg)) {
             return ['type' => 'label', 'value' => $arg];
-        } else {
-            fwrite(STDERR ,"Invalid argument\n");
-            exit(23);
         }
-    } else {
-        fwrite(STDERR ,"Invalid argument\n");
-        exit(23);
     }
+    fwrite(STDERR ,"Invalid argument\n");
+    exit(23);
 }
 
 function check_ops($args, $x) {
     $symb = ["var", "int", "bool", "string", "nil"];
     switch ($x) {
         case "var":
-            if ($args[0]['type'] != 'var') {
-                fwrite(STDERR ,"Invalid operands\n");
-                exit(23);
-            }
+            if ($args[0]['type'] != 'var') break;
             return 1;
         case "symb":
-            if (!in_array($args[0]['type'], $symb)) {
-                fwrite(STDERR ,"Invalid operands\n");
-                exit(23);
-            }
+            if (!in_array($args[0]['type'], $symb)) break;
             return 1;
         case "label":
-            if ($args[0]['type'] != 'label') {
-                fwrite(STDERR ,"Invalid operands\n");
-                exit(23);
-            }
+            if ($args[0]['type'] != 'label') break;
             return 1;
         case "var_symb":
-            if ($args[0]['type'] != 'var' || !in_array($args[1]['type'], $symb)) {
-                fwrite(STDERR ,"Invalid operands\n");
-                exit(23);
-            }
+            if ($args[0]['type'] != 'var' || !in_array($args[1]['type'], $symb)) break;
             return 1;
         case "var_type":
-            if ($args[0]['type'] != 'var' || $args[1]['type'] != 'type') {
-                fwrite(STDERR ,"Invalid operands\n");
-                exit(23);
-            }
+            if ($args[0]['type'] != 'var' || $args[1]['type'] != 'type') break;
             return 1;
         case "var_symb_symb":
-            if ($args[0]['type'] != 'var' || !in_array($args[1]['type'], $symb) || !in_array($args[2]['type'], $symb)) {
-                fwrite(STDERR ,"Invalid operands\n");
-                exit(23);
-            }
+            if ($args[0]['type'] != 'var' || !in_array($args[1]['type'], $symb) || !in_array($args[2]['type'], $symb)) break;
             return 1;
         case "label_symb_symb":
-            if ($args[0]['type'] != 'label' || !in_array($args[1]['type'], $symb) || !in_array($args[2]['type'], $symb)) {
-                fwrite(STDERR ,"Invalid operands\n");
-                exit(23);
-            }
+            if ($args[0]['type'] != 'label' || !in_array($args[1]['type'], $symb) || !in_array($args[2]['type'], $symb)) break;
             return 1;
         default:
-            return 1;
+            break;
     }
+    fwrite(STDERR ,"Invalid operands\n");
+    exit(23);
 }
 
-$longopts  = array("help");
-$options = getopt("", $longopts, $rest_index);
-
-if ($rest_index > 2) {
-    fwrite(STDERR ,"Invalid number of arguments\n");
-    exit(1);
+function invalid_args() {
+    fwrite(STDERR ,"Invalid number of instruction arguments\n");
+    exit(23);
 }
+
+$options = getopt("", ["help"]);
 if (isset($options['help'])) {
     usage();
-} elseif ($rest_index != 1) {
-    fwrite(STDERR ,"Invalid CLI argument\n");
-    exit(1);
+    if ($argv > 2) {
+        fwrite(STDERR ,"Invalid number of arguments\n");
+        exit(10);
+    }
+    exit(0);
 }
 
 $stdin = fopen('php://stdin', 'r');
@@ -148,10 +113,6 @@ while (true) {
         break;
     } else {
         fwrite(STDERR ,"Invalid header\n");
-        exit(21);
-    }
-    if (feof($stdin)) {
-        fwrite(STDERR ,"Missing header\n");
         exit(21);
     }
 }
@@ -183,81 +144,49 @@ while ($line = fgets(STDIN)) {
     $elements = preg_split('/\s+/', trim($clean[0]));
 
     $instr = strtoupper($elements[0]);
+    $args = array_map('parseArg', array_slice($elements,1));
     $order++;
 
     if (in_array($instr, $zeros)) {
-        if (count($elements) != 1) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        addXML($xml, $instr, $order, array_map('parseArg', array_slice($elements,1)));
-
+        if (count($elements) != 1) invalid_args();
+        addXML($xml, $instr, $order, $args);
     } elseif (in_array($instr, $only_label)) {
-        if (count($elements) != 2) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) != 2) invalid_args();
         check_ops($args,"label");
         addXML($xml, $instr, $order, $args);
     } elseif (in_array($instr, $var_only)) {
-        if (count($elements) != 2) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) != 2) invalid_args();
         check_ops($args,"var");
         addXML($xml, $instr, $order, $args);
     } elseif (in_array($instr, $symb_only)) {
-        if (count($elements) != 2) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) != 2) invalid_args();
         check_ops($args,"symb");
         addXML($xml, $instr, $order, $args);
     } elseif (in_array($instr, $var_symb)) {
-        if (count($elements) != 3) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) != 3) invalid_args();
         check_ops($args,"var_symb");
         addXML($xml, $instr, $order, $args);
     } elseif (in_array($instr, $var_type)) {
-        if (count($elements) != 3) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) != 3) invalid_args();
         check_ops($args,"var_type");
         addXML($xml, $instr, $order, $args);
     } elseif (in_array($instr, $var_symb_symb)) {
-        if (count($elements) != 4) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) != 4) invalid_args();
         check_ops($args,"var_symb_symb");
         addXML($xml, $instr, $order, $args);
     } elseif (in_array($instr, $label_symb_symb)) {
-        if (count($elements) != 4) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) != 4) invalid_args();
         check_ops($args,"label_symb_symb");
         addXML($xml, $instr, $order, $args);
     } elseif ($instr == "WRITE") {
-        if (count($elements) < 2) {
-            fwrite(STDERR ,"Invalid number of arguments\n");
-            exit(23);
-        }
-        $args = array_map('parseArg', array_slice($elements,1));
+        if (count($elements) < 2) invalid_args();
         for ($i = 0; $i < count($args); $i++) {
             check_ops(array_slice($args, $i),"symb");
         }
         addXML($xml, $instr, $order, $args);
+    } elseif ($instr == ".IPPCODE23") {
+        fwrite(STDERR ,"Invalid additional header\n");
+        exit(21);
     } else {
         fwrite(STDERR ,"Invalid instruction\n");
         exit(22);
