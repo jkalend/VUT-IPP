@@ -120,7 +120,7 @@ while (true) {
 $order = 0;
 $zeros = ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"];
 $only_label = ["CALL", "LABEL", "JUMP"];
-$symb_only = ["PUSHS", "EXIT", "DPRINT"];
+$symb_only = ["PUSHS", "EXIT", "DPRINT", "WRITE"];
 $var_only = ["DEFVAR", "POPS"];
 $var_symb = ["MOVE", "INT2CHAR", "STRLEN", "TYPE", "NOT"];
 $var_type = ["READ"];
@@ -177,12 +177,6 @@ while ($line = fgets(STDIN)) {
     } elseif (in_array($instr, $label_symb_symb)) {
         if (count($elements) != 4) invalid_args();
         check_ops($args,"label_symb_symb");
-        addXML($xml, $instr, $order, $args);
-    } elseif ($instr == "WRITE") {
-        if (count($elements) < 2) invalid_args();
-        for ($i = 0; $i < count($args); $i++) {
-            check_ops(array_slice($args, $i),"symb");
-        }
         addXML($xml, $instr, $order, $args);
     } elseif ($instr == ".IPPCODE23") {
         fwrite(STDERR ,"Invalid additional header\n");
