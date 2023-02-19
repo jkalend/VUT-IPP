@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import argparse
 import re
 from dataclasses import dataclass
-from typing import Generator, Dict, Callable, List, Tuple, TextIO
+from typing import Generator, Dict, Callable, List, Tuple, TextIO, Any
 from xml.etree.ElementTree import Element
 
 
@@ -94,7 +94,7 @@ class Instruction:
 @dataclass
 class Variable:
     """Class for storing variable"""
-    value: "typing.Any" = None
+    value: "Any" = None
     name: str = ""
     type: str = ""
 
@@ -118,7 +118,6 @@ class Frame:
         :param var: variable to add
         """
         self.frame[var] = Variable(name=var)
-
 
 
 class Interpret:
@@ -298,7 +297,7 @@ class Interpret:
         start = 0 if first else 1
         destination = \
             self._get_frame(instruction.args[0].text.split('@')[0]).\
-                get(instruction.args[0].text.split('@')[1]) if dest else None
+            get(instruction.args[0].text.split('@')[1]) if dest else None
 
         for i in instruction.args[start:]:
             if i.attrib['type'] == 'var':
