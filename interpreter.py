@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import argparse
 import re
 from dataclasses import dataclass
-from typing import Generator, Dict, Type, Callable, List, Tuple
+from typing import Generator, Dict, Callable, List, Tuple, TextIO
 from xml.etree.ElementTree import Element
 
 
@@ -48,7 +48,7 @@ class XMLParser:
                 return ET.parse(self.args.source).getroot()
             except ET.ParseError:
                 print("Error: XML file is not valid")
-                exit(31)
+                sys.exit(31)
 
     def _load_xml(self) -> str:
         """Loads XML file from stdin
@@ -57,12 +57,12 @@ class XMLParser:
         """
         return sys.stdin.read()
 
-    def get_input(self) -> str:
+    def get_input(self) -> TextIO | None:
         """Returns input file
 
         :return: input file or None
         """
-        return self.args.input if self.args.input is not None else None
+        return open(self.args.input) if self.args.input is not None else None
 
     def get_instructions(self) -> Generator[Element, None, None]:
         """Yields instructions from XML file
@@ -86,7 +86,7 @@ class Instruction:
         :param instruction: instruction
         :return: list of arguments
         """
-        exit(32) if int(instruction.attrib['order']) < 1 else None
+        sys.exit(32) if int(instruction.attrib['order']) < 1 else None
 
         return [instruction.find(arg.tag) for arg in instruction if instruction.find(arg.tag) is not None]
 
@@ -110,7 +110,7 @@ class Frame:
         :param id: id of variable
         :return: variable with given id
         """
-        return self.frame[id] if id in self.frame.keys() else exit(54)
+        return self.frame[id] if id in self.frame.keys() else sys.exit(54)
 
     def add(self, var) -> None:
         """Adds variable to frame
@@ -151,8 +151,7 @@ class Interpret:
         :return: input as string
         """
         if self.input is not None:
-            with open(self.input, 'r') as file:
-                return in_data if (in_data := file.read()) != '' else "nil"
+            return in_data if (in_data := self.input.readline()) != '' else "nil"
         else:
             try:
                 return input()
@@ -195,7 +194,7 @@ class Interpret:
             try:
                 return int(value)
             except ValueError:
-                exit(32)
+                sys.exit(32)
 
     def _get_labels(self) -> Dict[str, Instruction]:
         """Yields dictionary of labels
@@ -206,7 +205,7 @@ class Interpret:
         for instruction in self.instructions:
             if instruction.opcode == 'LABEL':
                 label = instruction.args[0].text
-                labels[label] = instruction if label not in labels else exit(52)
+                labels[label] = instruction if label not in labels else sys.exit(52)
         return labels
 
     def _parse_string(self, string: str) -> str:
@@ -305,8 +304,8 @@ class Interpret:
             if i.attrib['type'] == 'var':
                 var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
                 if var.type == "":
-                    exit(56)
-                arg.append(var) if var.type == limit or limit == "" else exit(56)
+                    sys.exit(56)
+                arg.append(var) if var.type == limit or limit == "" else sys.exit(56)
             elif i.attrib['type'] == 'string' and 's' in options:
                 arg.append(Variable(value=self._parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int' and 'i' in options:
@@ -316,7 +315,7 @@ class Interpret:
             elif i.attrib['type'] == 'nil' and 'n' in options:
                 arg.append(Variable(value=i.text, type='nil'))
             else:
-                exit(53)
+                sys.exit(53)
         return (destination, arg) if dest else arg
 
     def _move(self, instruction: Instruction) -> None:
@@ -331,7 +330,7 @@ class Interpret:
         if arg.attrib['type'] == 'var':
             var = self._get_frame(arg.text.split('@')[0]).get(arg.text.split('@')[1])
             if var.type == "":
-                exit(56)
+                sys.exit(56)
             dest.value = var.value
             dest.type = var.type
         elif arg.attrib['type'] == 'int':
@@ -347,7 +346,7 @@ class Interpret:
             dest.value = 'nil'
             dest.type = 'nil'
         else:
-            exit(53)
+            sys.exit(53)
 
     def _createframe(self, instruction: Instruction) -> None:
         """Creates temporary frame"""
@@ -358,7 +357,7 @@ class Interpret:
 
         Exits with 55 if temporary frame is not defined
         """
-        self.frame_stack.append(self.temporary_frame) if self.temporary_frame is not None else exit(55)
+        self.frame_stack.append(self.temporary_frame) if self.temporary_frame is not None else sys.exit(55)
         self.temporary_frame = None
 
     def _popframe(self, instruction: Instruction) -> None:
@@ -367,7 +366,7 @@ class Interpret:
         Exits with 55 if frame stack is empty
         """
         if len(self.frame_stack) == 0:
-            exit(55)
+            sys.exit(55)
         self.temporary_frame = self.frame_stack.pop()
 
     def _defvar(self, instruction: Instruction) -> None:
@@ -382,7 +381,7 @@ class Interpret:
         """
         label = instruction.args[0].text
         if label not in self.labels:
-            exit(52)
+            sys.exit(52)
         self.call_stack.append(self.current)
         self.current = iter(self.instructions[self.labels[label].index:])
 
@@ -391,7 +390,7 @@ class Interpret:
 
         Exits with 56 if call stack is empty
         """
-        self.current = self.call_stack.pop() if len(self.call_stack) > 0 else exit(56)
+        self.current = self.call_stack.pop() if len(self.call_stack) > 0 else sys.exit(56)
 
     def _pushs(self, instruction: Instruction) -> None:
         """Pushes value onto data stack
@@ -406,7 +405,7 @@ class Interpret:
         Exits with 56 if data stack is empty
         """
         dest, _ = self._instruction_args(instruction, "", dest=True)
-        popped = self.data_stack.pop() if len(self.data_stack) > 0 else exit(56)
+        popped = self.data_stack.pop() if len(self.data_stack) > 0 else sys.exit(56)
         dest.value, dest.type = popped.value, popped.type
 
     def _add(self, instruction: Instruction) -> None:
@@ -440,7 +439,7 @@ class Interpret:
         Exits with 57 if dividing by zero
         """
         dest, arg = self._instruction_args(instruction, "i", dest=True)
-        dest.value = arg[0].value // arg[1].value if arg[1].value != 0 else exit(57)
+        dest.value = arg[0].value // arg[1].value if arg[1].value != 0 else sys.exit(57)
         dest.type = 'int'
 
     def _lt(self, instruction: Instruction) -> None:
@@ -449,7 +448,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self._instruction_args(instruction, "ibs", dest=True)
-        dest.value = (True if arg[0].value < arg[1].value else False) if arg[0].type == arg[1].type else exit(53)
+        dest.value = (True if arg[0].value < arg[1].value else False) if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
 
     def _gt(self, instruction: Instruction) -> None:
@@ -458,7 +457,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self._instruction_args(instruction, "ibs", dest=True)
-        dest.value = (True if arg[0].value > arg[1].value else False) if arg[0].type == arg[1].type else exit(53)
+        dest.value = (True if arg[0].value > arg[1].value else False) if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
 
     def _eq(self, instruction: Instruction) -> None:
@@ -476,7 +475,7 @@ class Interpret:
             dest.value = False
             return
 
-        dest.value = (True if arg[0].value == arg[1].value else False) if arg[0].type == arg[1].type else exit(53)
+        dest.value = (True if arg[0].value == arg[1].value else False) if arg[0].type == arg[1].type else sys.exit(53)
 
     def _and(self, instruction: Instruction) -> None:
         """Performs logical and on arg1 and arg2 and stores result in variable
@@ -513,7 +512,7 @@ class Interpret:
         try:
             dest.value, dest.type = chr(arg[0].value), "string"
         except ValueError:
-            exit(58)
+            sys.exit(58)
 
     def _stri2int(self, instruction: Instruction) -> None:
         """Converts char to int and stores result in variable
@@ -525,24 +524,24 @@ class Interpret:
         arg = []
         if instruction.args[1].attrib['type'] == 'var':
             var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
-            arg.append(var) if var.type == "string" else exit(53)
+            arg.append(var) if var.type == "string" else sys.exit(53)
         elif instruction.args[1].attrib['type'] == 'string':
             arg.append(Variable(value=self._parse_string(instruction.args[1].text), type='string'))
         else:
-            exit(53)
+            sys.exit(53)
 
         if instruction.args[2].attrib['type'] == 'var':
             var = self._get_frame(instruction.args[2].text.split('@')[0]).get(instruction.args[2].text.split('@')[1])
-            arg.append(var) if var.type == "int" else exit(53)
+            arg.append(var) if var.type == "int" else sys.exit(53)
         elif instruction.args[2].attrib['type'] == 'int':
             arg.append(Variable(value=self._int(instruction.args[2].text), type='int'))
         else:
-            exit(53)
+            sys.exit(53)
 
         try:
             dest.value, dest.type = ord(arg[0].value[arg[1].value]), 'int'
         except ValueError:
-            exit(58)
+            sys.exit(58)
 
     def _read(self, instruction: Instruction) -> None:
         """Reads input from stdin and stores it in variable"""
@@ -591,24 +590,24 @@ class Interpret:
         arg = []
         if instruction.args[1].attrib['type'] == 'var':
             var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
-            arg.append(var) if var.type == "string" else exit(53)
+            arg.append(var) if var.type == "string" else sys.exit(53)
         elif instruction.args[1].attrib['type'] == 'string':
             arg.append(Variable(value=self._parse_string(instruction.args[1].text), type='string'))
         else:
-            exit(53)
+            sys.exit(53)
 
         if instruction.args[2].attrib['type'] == 'var':
             var = self._get_frame(instruction.args[2].text.split('@')[0]).get(instruction.args[2].text.split('@')[1])
-            arg.append(var) if var.type == "int" else exit(53)
+            arg.append(var) if var.type == "int" else sys.exit(53)
         elif instruction.args[2].attrib['type'] == 'int':
             arg.append(Variable(value=self._int(instruction.args[2].text), type='int'))
         else:
-            exit(53)
+            sys.exit(53)
 
         try:
             dest.value, dest.type = arg[0].value[arg[1].value], 'string'
         except IndexError:
-            exit(58)
+            sys.exit(58)
 
     def _setchar(self, instruction: Instruction) -> None:
         """Sets character in string at given index to given character
@@ -618,30 +617,30 @@ class Interpret:
         """
         dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         if dest.type != 'string':
-            exit(53)
+            sys.exit(53)
         arg = []
         if instruction.args[1].attrib['type'] == 'var':
             var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
-            arg.append(var) if var.type == "int" else exit(53)
+            arg.append(var) if var.type == "int" else sys.exit(53)
         elif instruction.args[1].attrib['type'] == 'int':
             arg.append(Variable(value=self._int(instruction.args[1].text), type='int'))
         else:
-            exit(53)
+            sys.exit(53)
 
         if instruction.args[2].attrib['type'] == 'var':
             var = self._get_frame(instruction.args[2].text.split('@')[0]).get(instruction.args[2].text.split('@')[1])
-            arg.append(var) if var.type == "string" else exit(53)
+            arg.append(var) if var.type == "string" else sys.exit(53)
         elif instruction.args[2].attrib['type'] == 'string':
             arg.append(Variable(value=self._parse_string(instruction.args[2].text), type='string'))
         else:
-            exit(53)
+            sys.exit(53)
 
         try:
             dest.value =\
                 "".join(list(dest.value)[:arg[0].value] + [arg[1].value[0]] + list(dest.value)[arg[0].value+1:])
             dest.type = 'string'
         except IndexError:
-            exit(58)
+            sys.exit(58)
 
     def _type(self, instruction: Instruction) -> None:
         """Gets type of variable and stores it in variable
@@ -653,7 +652,6 @@ class Interpret:
 
     def _label(self, instruction: Instruction) -> None:
         """Creates label"""
-        pass
 
     def _jump(self, instruction: Instruction) -> None:
         """Jumps to label
@@ -661,7 +659,7 @@ class Interpret:
         Exits with 52 if label does not exist
         """
         if instruction.args[0].text not in self.labels:
-            exit(52)
+            sys.exit(52)
         self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
 
     def _jumpifeq(self, instruction: Instruction) -> None:
@@ -671,7 +669,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         if instruction.args[0].text not in self.labels:
-            exit(52)
+            sys.exit(52)
         arg = self._instruction_args(instruction, "isbn")
 
         if arg[0].type == arg[1].type:
@@ -680,7 +678,7 @@ class Interpret:
         elif arg[0].type == 'nil' or arg[1].type == 'nil':
             pass
         else:
-            exit(53)
+            sys.exit(53)
 
     def _jumpifneq(self, instruction: Instruction) -> None:
         """Jumps to label if values are not equal
@@ -689,7 +687,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         if instruction.args[0].text not in self.labels:
-            exit(52)
+            sys.exit(52)
         arg = self._instruction_args(instruction, "isbn")
 
         if arg[0].type == arg[1].type:
@@ -698,7 +696,7 @@ class Interpret:
         elif arg[0].type == 'nil' or arg[1].type == 'nil':
             self.current = iter(self.instructions[self.labels[instruction.args[0].text]:])
         else:
-            exit(53)
+            sys.exit(53)
 
     def _exit(self, instruction: Instruction) -> None:
         """Exits program
@@ -706,7 +704,7 @@ class Interpret:
         Exits with 57 if value is not in range 0-49
         """
         arg = self._instruction_args(instruction, "i", first=True)
-        exit(arg[0].value) if 0 <= arg[0].value <= 49 else exit(57)
+        sys.exit(arg[0].value) if 0 <= arg[0].value <= 49 else sys.exit(57)
 
     def _dprint(self, instruction: Instruction) -> None:
         """Prints value to stderr"""
