@@ -6,7 +6,7 @@ class ArgParse {
         $this->stats_files = [];
         $this->stat_names = [];
         if (in_array("--help", $argv)) {
-            if ($argv > 2) {
+            if (count($argv) > 2) {
                 fwrite(STDERR ,"Invalid number of arguments\n");
                 exit(10);
             }
@@ -61,7 +61,7 @@ class ArgParse {
                 }
                 $this->stats_files[count($this->stats_files) - 1][] = $argv[++$i];
             } elseif (preg_match('/^--eol$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1]["eol"] = true;
+                $this->stats_files[count($this->stats_files) - 1][] = "eol";
             } else {
                 fwrite(STDERR, "Invalid command line argument\n");
                 exit(10);
@@ -74,22 +74,28 @@ class ArgParse {
     }
 
     private function usage() {
-        fwrite(STDOUT ,"Usage: parse.php [--help]\n  Accepts file contents on stdin and outputs XML to stdout.\n");
+        fwrite(STDOUT ,"Usage: parse.php [--help] [--stats FILE] [--stats=FILE]
+         [--loc] [--comments] [--labels] [--jumps] [--fwjumps] [--backjumps]
+         [--badjumps] [--frequent] [--print=FILE] [--print FILE] [--eol]
+         \nAccepts file contents on stdin and outputs XML to stdout.
+         \n--stats have to be specified before any other stats argument.\n");
         exit(0);
     }
 }
 
 class XMLCreator {
-    private $xml;
+    private $xml, $help;
     public $order;
 
-    function __construct() {
+    function __construct($argv) {
         $this->order = 1;
+        $this->help = in_array("--help", $argv);
         $this->xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><program language="IPPcode23"></program>');
     }
 
     function __destruct() {
-        echo $this->xml->asXML();
+        if (!$this->help)
+           echo $this->xml->asXML();
     }
 
     function addXML($name, $args) {
@@ -125,10 +131,6 @@ class Stats {
     }
 
     function __destruct() {
-        echo "\n";
-        var_dump($this->labels);
-        echo "\n";
-        $nl = "\n";
         $file = false;
         foreach ($this->stats as $i) {
             foreach ($i as $x => $stat) {
@@ -136,40 +138,40 @@ class Stats {
                     $file = fopen($stat, "w");
                     continue;
                 }
-                if (isset($i["eol"])) $nl = "\n";
-
                 if ($stat == "loc") {
-                    fwrite($file, $this->loc . $nl);
-                    //echo $this->loc . $nl;
+                    fwrite($file, $this->loc . "\n");
+                    //echo $this->loc . "\n";
                 } elseif ($stat == "comments") {
-                    fwrite($file, $this->comments . $nl);
-                    //echo $this->comments . $nl;
+                    fwrite($file, $this->comments . "\n");
+                    //echo $this->comments . "\n";
                 } elseif ($stat == "labels") {
-                    fwrite($file, count($this->labels) . $nl);
-                    //echo count($this->labels) . $nl;
+                    fwrite($file, count($this->labels) . "\n");
+                    //echo count($this->labels) . "\n";
                 } elseif ($stat == "jumps") {
-                    fwrite($file, $this->jumps . $nl);
-                    //echo $this->jumps . $nl;
+                    fwrite($file, $this->jumps . "\n");
+                    //echo $this->jumps . "\n";
                 } elseif ($stat == "fwjumps") {
-                    fwrite($file, $this->fwjumps . $nl);
-                    //echo $this->fwjumps . $nl;
+                    fwrite($file, $this->fwjumps . "\n");
+                    //echo $this->fwjumps . "\n";
                 } elseif ($stat == "backjumps") {
-                    fwrite($file, $this->backjumps . $nl);
-                    //echo $this->backjumps . $nl;
+                    fwrite($file, $this->backjumps . "\n");
+                    //echo $this->backjumps . "\n";
                 } elseif ($stat == "badjumps") {
-                    fwrite($file, $this->badjumps . $nl);
-                    //echo $this->badjumps . $nl;
+                    fwrite($file, $this->badjumps . "\n");
+                    //echo $this->badjumps . "\n";
                 } elseif ($stat == "frequent") {
                     arsort($this->frequent);
                     foreach ($this->frequent as $instr => $count) {
                         fwrite($file, $instr . ",");
                         //echo $instr . ",";
                     }
-                    fwrite($file, $nl);
-                    //echo $nl;
+                    fwrite($file, "\n");
+                    //echo "\n";
+                } elseif ($stat == "eol") {
+                    fwrite($file, "\n");
                 } else {
-                    fwrite($file, $stat . $nl);
-                    //echo $stat . $nl;
+                    fwrite($file, $stat . "\n");
+                    //echo $stat . "\n";
                 }
             }
             if (is_resource($file)) fclose($file);
@@ -188,11 +190,11 @@ class Stats {
     public function gather($instr, $args) {
         $this->loc++;
 
-        if (!array_key_exists($instr, $this->frequent)) {
+        if (!array_key_exists($instr, $this->frequent))
             $this->frequent[$instr] = 0;
-        } else {
+        else
             $this->frequent[$instr]++;
-        }
+
 
         if ($instr == 'LABEL') {
             if (in_array($args[0]["value"], $this->labels)) return;
@@ -203,14 +205,11 @@ class Stats {
         if (in_array($instr, $this->jump_istr)) {
             $this->jumps++;
             if ($instr == 'RETURN') {
-                if (count($this->last_call) == 0) $this->badjumps++;
-                else {
-                    $direction = array_pop($this->last_call);
-                    if ($direction == -1)
-                        $this->fwjumps++;
-                    else
-                        $this->backjumps++;
-                }
+                $direction = array_pop($this->last_call);
+                if ($direction == -1)
+                    $this->fwjumps++;
+                else
+                    $this->backjumps++;
                 return;
             }
             if (!array_key_exists($args[0]["value"], $this->jump_dirs))
@@ -220,14 +219,12 @@ class Stats {
 
             if (in_array($args[0]["value"], $this->labels)) {
                 $this->backjumps++;
-                if ($instr == 'CALL') {
+                if ($instr == 'CALL')
                     $this->last_call[] = -1;
-                }
             } else {
                 $this->fwjumps++;
-                if ($instr == 'CALL') {
+                if ($instr == 'CALL')
                     $this->last_call[] = 1;
-                }
             }
         }
     }
@@ -242,7 +239,7 @@ class Parser {
             $args, $xml, $argparse, $instr, $stats;
 
     function __construct($argv) {
-        $this->xml = new XMLCreator();
+        $this->xml = new XMLCreator($argv);
         $this->argparse = new ArgParse($argv);
         $this->stats = new Stats($this->argparse->fetch_stats());
         

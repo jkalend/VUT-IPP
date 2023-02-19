@@ -57,7 +57,7 @@ class XMLParser:
         """
         return sys.stdin.read()
 
-    def get_input(self) -> TextIO | None:
+    def get_input(self) -> TextIO:
         """Returns input file
 
         :return: input file or None
@@ -104,7 +104,7 @@ class Frame:
     def __init__(self):
         self.frame = {}
 
-    def get(self, id) -> Variable:
+    def get(self, id: str) -> Variable:
         """Returns variable with given id
 
         :param id: id of variable
@@ -112,7 +112,7 @@ class Frame:
         """
         return self.frame[id] if id in self.frame.keys() else sys.exit(54)
 
-    def add(self, var) -> None:
+    def add(self, var: str) -> None:
         """Adds variable to frame
 
         :param var: variable to add
@@ -194,7 +194,7 @@ class Interpret:
             try:
                 return int(value)
             except ValueError:
-                sys.exit(32)
+                sys.exit(57)
 
     def _get_labels(self) -> Dict[str, Instruction]:
         """Yields dictionary of labels
