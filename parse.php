@@ -104,6 +104,8 @@ class XMLCreator {
         $xml_in->addAttribute('opcode', $name);
         foreach ($args as $i => $arg) {
             $arg = preg_replace('/&/', '&amp;', $arg);
+            $arg = preg_replace('/</', '&lt;', $arg);
+            $arg = preg_replace('/>/', '&gt;', $arg);
             $xml_arg = $xml_in->addChild('arg' . ($i + 1), $arg['value']);
             $xml_arg->addAttribute('type', $arg['type']);
         }
