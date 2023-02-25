@@ -217,6 +217,8 @@ class Interpret:
                 self.operations[instruction.opcode](instruction)
         except StopIteration:
             return
+        # except ValueError:
+        #     sys.exit(57)  # int error
 
     def _process_input(self) -> str:
         """Processes input
@@ -264,10 +266,7 @@ class Interpret:
         elif re.match(r'^[+-]?0[Oo]?', value):
             return int(value, 8)
         else:
-            try:
-                return int(value)
-            except ValueError:
-                sys.exit(57)
+            return int(value)
 
     def _get_labels(self) -> Dict[str, Instruction]:
         """Yields dictionary of labels
@@ -287,9 +286,7 @@ class Interpret:
         :param string: string to be parsed
         :return: parsed string
         """
-        while re.match(r'.*\\[0-9]{3}.*', string):
-            string = re.sub(r'\\([0-9]{3})', lambda x: chr(int(x.group(1))), string)
-        return string
+        return re.sub(r'\\(\d{3})', lambda x: chr(int(x.group(1))), string)
 
     def _init_operations(self) -> Dict[str, Callable]:
         """Initializes dictionary of operations
@@ -375,10 +372,9 @@ class Interpret:
 
         for i in instruction.args[start:]:
             if i.attrib['type'] == 'var':
-                var = self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])
-                if var.type == "":
-                    sys.exit(56)
-                arg.append(var) if var.type == limit or limit == "" else sys.exit(56)
+                var = var if (var := self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])).type != "" \
+                    else sys.exit(56)
+                arg.append(var) if var.type == limit or limit == "" else sys.exit(53)
             elif i.attrib['type'] == 'string' and 's' in options:
                 arg.append(Variable(value=self._parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int' and 'i' in options:
@@ -401,23 +397,17 @@ class Interpret:
         dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         arg = instruction.args[1]
         if arg.attrib['type'] == 'var':
-            var = self._get_frame(arg.text.split('@')[0]).get(arg.text.split('@')[1])
-            if var.type == "":
-                sys.exit(56)
-            dest.value = var.value
-            dest.type = var.type
+            var = var if (var := self._get_frame(arg.text.split('@')[0]).get(arg.text.split('@')[1])).type != ""\
+                else sys.exit(56)
+            dest.value, dest.type = var.value, var.type
         elif arg.attrib['type'] == 'int':
-            dest.value = self._int(arg.text)
-            dest.type = 'int'
+            dest.value, dest.type = self._int(arg.text), 'int'
         elif arg.attrib['type'] == 'bool':
-            dest.value = self._process_bool(arg.text)
-            dest.type = 'bool'
+            dest.value, dest.type = self._process_bool(arg.text), 'bool'
         elif arg.attrib['type'] == 'string':
-            dest.value = self._parse_string(arg.text)
-            dest.type = 'string'
+            dest.value, dest.type = self._parse_string(arg.text), 'string'
         elif arg.attrib['type'] == 'nil':
-            dest.value = 'nil'
-            dest.type = 'nil'
+            dest.value, dest.type = 'nil', 'nil'
         else:
             sys.exit(53)
 
@@ -438,9 +428,7 @@ class Interpret:
 
         Exits with 55 if frame stack is empty
         """
-        if len(self.frame_stack) == 0:
-            sys.exit(55)
-        self.temporary_frame = self.frame_stack.pop()
+        self.temporary_frame = self.frame_stack.pop() if len(self.frame_stack) > 0 else sys.exit(55)
 
     def _defvar(self, instruction: Instruction) -> None:
         """Defines variable in a frame"""
