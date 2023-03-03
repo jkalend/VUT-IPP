@@ -162,8 +162,10 @@ class Stats {
                     fwrite($file, $this->badjumps . "\n");
                 } elseif ($stat == "frequent") {
                     arsort($this->frequent);
+                    $comma = count($this->frequent);
                     foreach ($this->frequent as $instr => $count) {
-                        fwrite($file, $instr . ",");
+                        fwrite($file, $instr);
+                        if (--$comma > 0) fwrite($file, ",");
                     }
                     fwrite($file, "\n");
                 } elseif ($stat == "eol") {
