@@ -53,13 +53,13 @@ class ArgParse {
             } elseif (preg_match('/^--frequent$/', $argv[$i]) && count($this->stats_files) != 0) {
                 $this->stats_files[count($this->stats_files) - 1][] = "frequent";
             } elseif (preg_match('/^--print=/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = preg_replace('/^--print=/', '', $argv[$i]);
+                $this->stats_files[count($this->stats_files) - 1][] = ["print", preg_replace('/^--print=/', '', $argv[$i])];
             } elseif (preg_match('/^--print$/', $argv[$i]) && count($this->stats_files) != 0) {
                 if ($i + 1 >= count($argv)) {
                     fwrite(STDERR, "Missing print argument\n");
                     exit(10);
                 }
-                $this->stats_files[count($this->stats_files) - 1][] = $argv[++$i];
+                $this->stats_files[count($this->stats_files) - 1][] = ["print", $argv[++$i]];
             } elseif (preg_match('/^--eol$/', $argv[$i]) && count($this->stats_files) != 0) {
                 $this->stats_files[count($this->stats_files) - 1][] = "eol";
             } else {
@@ -140,40 +140,36 @@ class Stats {
                     $file = fopen($stat, "w");
                     continue;
                 }
+                if (is_array($stat)) {
+                    fwrite($file, $stat[1] . "\n");
+                    continue;
+                }
+
                 if ($stat == "loc") {
                     fwrite($file, $this->loc . "\n");
-                    //echo $this->loc . "\n";
                 } elseif ($stat == "comments") {
                     fwrite($file, $this->comments . "\n");
-                    //echo $this->comments . "\n";
                 } elseif ($stat == "labels") {
                     fwrite($file, count($this->labels) . "\n");
-                    //echo count($this->labels) . "\n";
                 } elseif ($stat == "jumps") {
                     fwrite($file, $this->jumps . "\n");
-                    //echo $this->jumps . "\n";
                 } elseif ($stat == "fwjumps") {
                     fwrite($file, $this->fwjumps . "\n");
-                    //echo $this->fwjumps . "\n";
                 } elseif ($stat == "backjumps") {
                     fwrite($file, $this->backjumps . "\n");
-                    //echo $this->backjumps . "\n";
                 } elseif ($stat == "badjumps") {
+                    $this->get_badjumps();
                     fwrite($file, $this->badjumps . "\n");
-                    //echo $this->badjumps . "\n";
                 } elseif ($stat == "frequent") {
                     arsort($this->frequent);
                     foreach ($this->frequent as $instr => $count) {
                         fwrite($file, $instr . ",");
-                        //echo $instr . ",";
                     }
                     fwrite($file, "\n");
-                    //echo "\n";
                 } elseif ($stat == "eol") {
                     fwrite($file, "\n");
                 } else {
-                    fwrite($file, $stat . "\n");
-                    //echo $stat . "\n";
+                    exit(99);
                 }
             }
             if (is_resource($file)) fclose($file);
@@ -214,8 +210,9 @@ class Stats {
                     $this->backjumps++;
                 return;
             }
+
             if (!array_key_exists($args[0]["value"], $this->jump_dirs))
-                $this->jump_dirs[$args[0]["value"]] = 0;
+                $this->jump_dirs[$args[0]["value"]] = 1;
             else
                 $this->jump_dirs[$args[0]["value"]]++;
 
@@ -229,10 +226,6 @@ class Stats {
                     $this->last_call[] = 1;
             }
         }
-    }
-
-    public function print() {
-
     }
 }
 
