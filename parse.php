@@ -1,8 +1,13 @@
 <?php
+
+ini_set('display_errors', 'stderr');
+
 class ArgParse {
-    public $stats_files, $stat_names;
+    # Class for parsing the command line arguments
+    private $stats_files, $stat_names;
 
     function __construct($argv) {
+        # parses the command line arguments
         $this->stats_files = [];
         $this->stat_names = [];
         if (in_array("--help", $argv)) {
@@ -12,6 +17,8 @@ class ArgParse {
             }
             $this->usage();
         }
+
+        # Parses the stats arguments
         for ($i = 1; $i < count($argv); $i++) {
             if (preg_match('/^--stats=/', $argv[$i])) {
                 $name = preg_replace('/^--stats=/', '', $argv[$i]);
@@ -70,10 +77,12 @@ class ArgParse {
     }
 
     public function fetch_stats() {
+        # Getter for the stats files
         return $this->stats_files;
     }
 
     private function usage() {
+        # Prints the usage
         fwrite(STDOUT ,"Usage: parse.php [--help] [--stats FILE] [--stats=FILE]
          [--loc] [--comments] [--labels] [--jumps] [--fwjumps] [--backjumps]
          [--badjumps] [--frequent] [--print=FILE] [--print FILE] [--eol]
@@ -84,25 +93,21 @@ class ArgParse {
 }
 
 class XMLCreator {
-    private $xml, $help;
-    public $order;
+    # Class for creating the XML output
+    private $xml, $order;
 
     function __construct($argv) {
         $this->order = 1;
-        $this->help = in_array("--help", $argv);
         $this->xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><program language="IPPcode23"></program>');
     }
 
-    function __destruct() {
-        if (!$this->help)
-           echo $this->xml->asXML();
-    }
-
-    function addXML($name, $args) {
+    public function addXML($name, $args) {
+        # adds instruction and its arguments to the xml
         $xml_in = $this->xml->addChild('instruction');
         $xml_in->addAttribute('order', $this->order++);
         $xml_in->addAttribute('opcode', $name);
         foreach ($args as $i => $arg) {
+            # replaces the special characters with their XML entities
             $arg = preg_replace('/&/', '&amp;', $arg);
             $arg = preg_replace('/</', '&lt;', $arg);
             $arg = preg_replace('/>/', '&gt;', $arg);
@@ -111,11 +116,17 @@ class XMLCreator {
         }
         return 1;
     }
+
+    public function outputXML() {
+        # outputs the XML
+        echo $this->xml->asXML();
+    }
 }
 
 class Stats {
-    private $labels, $jumps, $fwjumps, $backjumps, $badjumps, $frequent, $jump_istr, $jump_dirs, $last_call, $stats;
-    public $loc, $comments;
+    # Class used to gather and write the stats
+    private $labels, $jumps, $fwjumps, $backjumps, $badjumps, $frequent,
+        $jump_istr, $jump_dirs, $last_call, $stats, $loc, $comments;
 
     function __construct($stats) {
         $this->stats = $stats;
@@ -133,6 +144,7 @@ class Stats {
     }
 
     function __destruct() {
+        # writes the stats to the files
         $file = false;
         foreach ($this->stats as $i) {
             foreach ($i as $x => $stat) {
@@ -171,7 +183,7 @@ class Stats {
                 } elseif ($stat == "eol") {
                     fwrite($file, "\n");
                 } else {
-                    exit(99);
+                    exit(10);
                 }
             }
             if (is_resource($file)) fclose($file);
@@ -179,6 +191,7 @@ class Stats {
     }
 
     private function get_badjumps() {
+        # counts the bad jumps and subtracts them from the speculative forward jumps
         foreach ($this->jump_dirs as $dir => $jumps) {
             if (!in_array($dir, $this->labels)) {
                 $this->badjumps += $jumps;
@@ -188,6 +201,7 @@ class Stats {
     }
 
     public function gather($instr, $args) {
+        # Gathers the stats from the instructions
         $this->loc++;
 
         if (!array_key_exists($instr, $this->frequent))
@@ -229,17 +243,24 @@ class Stats {
             }
         }
     }
+
+    public function inc_comments() {
+        # increments the number of comments
+        $this->comments++;
+    }
 }
 
 class Parser {
-    private $zeros, $only_label, $symb_only, $var_only, $var_symb, $var_type, $var_symb_symb, $label_symb_symb, $symb,
-            $args, $xml, $argparse, $instr, $stats;
+    # Class used to parse the input
+    private $zeros, $only_label, $symb_only, $var_only, $var_symb, $var_type, $var_symb_symb,
+        $label_symb_symb, $symb, $args, $xml, $argparse, $instr, $stats;
 
     function __construct($argv) {
         $this->xml = new XMLCreator($argv);
         $this->argparse = new ArgParse($argv);
         $this->stats = new Stats($this->argparse->fetch_stats());
-        
+
+        # read the header
         while (true) {
             if (feof(STDIN)) {
                 fwrite(STDERR ,"Missing header\n");
@@ -249,12 +270,12 @@ class Parser {
             if (strlen($line) == 0) continue;
 
             if (str_starts_with($line, '#')) {
-                $this->stats->comments++;
+                $this->stats->inc_comments();
                 continue;
             }
 
             $line = explode('#', strtolower($line));
-            if (count($line) >= 2) $this->stats->comments++;
+            if (count($line) >= 2) $this->stats->inc_comments();
 
             if (preg_match('/^\.ippcode23$/', trim($line[0]))) {
                 break;
@@ -263,7 +284,8 @@ class Parser {
                 exit(21);
             }
         }
-        
+
+        # initialize the instruction arrays
         $this->symb = ["var", "int", "bool", "string", "nil"];
         $this->zeros = ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"];
         $this->only_label = ["CALL", "LABEL", "JUMP"];
@@ -275,6 +297,7 @@ class Parser {
         $this->label_symb_symb = ["JUMPIFEQ", "JUMPIFNEQ"];
     }
     private function parseArg($arg) {
+        # Parses the argument and returns the type and value
         if (preg_match('/^int@/', $arg)) {
             $arg = preg_replace('/^int@/', '', $arg);
             if (preg_match('/^[-+]?((0|([1-9][0-9]*(_[0-9]+)*))|(0[xX][0-9a-fA-F]+(_[0-9a-fA-F]+)*)|(0[oO]?[0-7]+(_[0-7]+)*))$/', $arg)) {
@@ -310,6 +333,7 @@ class Parser {
     }
 
     private function check_ops($x) {
+        # check if the instruction arguments are of a valid type and add them to the XML
         switch ($x) {
             case "var":
                 if ($this->args[0]['type'] != 'var') break;
@@ -352,21 +376,28 @@ class Parser {
     }
     
     public function parse() {
+        # main function for parsing the input
         while ($line = fgets(STDIN)) {
+
+            # skips the comments and empty lines
             $line = trim($line);
             if (strlen($line) == 0) continue;
             if (str_starts_with($line, '#')) {
-                $this->stats->comments++;
+                $this->stats->inc_comments();
                 continue;
             }
 
+            # splits the actual code from comments on the line
             $line = explode('#', $line);
-            if (count($line) >= 2) $this->stats->comments++;
+            if (count($line) >= 2) $this->stats->inc_comments();
 
+            # splits the line into an array of arguments
             $elements = preg_split('/\s+/', trim($line[0]));
             $this->instr = strtoupper($elements[0]);
+            # parses the arguments of the instructions and sets their types and values
             $this->args = array_map(array($this, 'parseArg'), array_slice($elements,1));
 
+            # checks if the instruction opcode is valid and if the number of arguments is correct
             if (in_array($this->instr, $this->zeros)) {
                 if (count($elements) != 1) $this->invalid_args();
                 $this->stats->gather($this->instr, $this->args);
@@ -400,8 +431,8 @@ class Parser {
                 exit(22);
             }
         }
+        $this->xml->outputXML();
     }
-
 }
 
 $parser = new Parser($argv);
