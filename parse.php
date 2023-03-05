@@ -7,15 +7,17 @@ class ArgParse {
     private $stats_files, $stat_names;
 
     function __construct($argv) {
-        # parses the command line arguments
+        # parses the command line arguments when initialized
         $this->stats_files = [];
         $this->stat_names = [];
         if (in_array("--help", $argv)) {
             if (count($argv) > 2) {
                 fwrite(STDERR ,"Invalid number of arguments\n");
+                $this->usage();
                 exit(10);
             }
             $this->usage();
+            exit(0);
         }
 
         # Parses the stats arguments
@@ -31,14 +33,17 @@ class ArgParse {
             } elseif (preg_match('/^--stats$/', $argv[$i])) {
                 if ($i + 1 >= count($argv)) {
                     fwrite(STDERR, "Missing stats file name\n");
+                    $this->usage();
                     exit(10);
                 }
                 $name = $argv[++$i];
                 if (in_array($name, $this->stat_names)) {
                     fwrite(STDERR, "Duplicate stats file name\n");
+                    $this->usage();
                     exit(12);
                 } elseif (preg_match('/^--/', $name)) {
                     fwrite(STDERR, "Invalid stats file name\n");
+                    $this->usage();
                     exit(10);
                 }
                 $this->stats_files[]["stats"] = $name;
@@ -64,6 +69,7 @@ class ArgParse {
             } elseif (preg_match('/^--print$/', $argv[$i]) && count($this->stats_files) != 0) {
                 if ($i + 1 >= count($argv)) {
                     fwrite(STDERR, "Missing print argument\n");
+                    $this->usage();
                     exit(10);
                 }
                 $this->stats_files[count($this->stats_files) - 1][] = ["print", $argv[++$i]];
@@ -71,6 +77,7 @@ class ArgParse {
                 $this->stats_files[count($this->stats_files) - 1][] = "eol";
             } else {
                 fwrite(STDERR, "Invalid command line argument\n");
+                $this->usage();
                 exit(10);
             }
         }
@@ -88,7 +95,6 @@ class ArgParse {
          [--badjumps] [--frequent] [--print=FILE] [--print FILE] [--eol]
          \nAccepts file contents on stdin and outputs XML to stdout.
          \n--stats have to be specified before any other stats argument.\n");
-        exit(0);
     }
 }
 
@@ -96,7 +102,7 @@ class XMLCreator {
     # Class for creating the XML output
     private $xml, $order;
 
-    function __construct($argv) {
+    function __construct() {
         $this->order = 1;
         $this->xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><program language="IPPcode23"></program>');
     }
@@ -118,7 +124,7 @@ class XMLCreator {
     }
 
     public function outputXML() {
-        # outputs the XML
+        # outputs the XML on stdout
         echo $this->xml->asXML();
     }
 }
@@ -144,7 +150,7 @@ class Stats {
     }
 
     function __destruct() {
-        # writes the stats to the files
+        # writes the stats to the files when the parser is done
         $file = false;
         foreach ($this->stats as $i) {
             foreach ($i as $x => $stat) {
@@ -253,10 +259,10 @@ class Stats {
 class Parser {
     # Class used to parse the input
     private $zeros, $only_label, $symb_only, $var_only, $var_symb, $var_type, $var_symb_symb,
-        $label_symb_symb, $symb, $args, $xml, $argparse, $instr, $stats;
+        $label_symb_symb, $types, $args, $xml, $argparse, $instr, $stats;
 
     function __construct($argv) {
-        $this->xml = new XMLCreator($argv);
+        $this->xml = new XMLCreator();
         $this->argparse = new ArgParse($argv);
         $this->stats = new Stats($this->argparse->fetch_stats());
 
@@ -286,7 +292,7 @@ class Parser {
         }
 
         # initialize the instruction arrays
-        $this->symb = ["var", "int", "bool", "string", "nil"];
+        $this->types = ["var", "int", "bool", "string", "nil"];
         $this->zeros = ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"];
         $this->only_label = ["CALL", "LABEL", "JUMP"];
         $this->symb_only = ["PUSHS", "EXIT", "DPRINT", "WRITE"];
@@ -296,6 +302,7 @@ class Parser {
         $this->var_symb_symb = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR"];
         $this->label_symb_symb = ["JUMPIFEQ", "JUMPIFNEQ"];
     }
+
     private function parseArg($arg) {
         # Parses the argument and returns the type and value
         if (preg_match('/^int@/', $arg)) {
@@ -340,7 +347,7 @@ class Parser {
                 $this->stats->gather($this->instr, $this->args);
                 return $this->xml->addXML($this->instr, $this->args);
             case "symb":
-                if (!in_array($this->args[0]['type'], $this->symb)) break;
+                if (!in_array($this->args[0]['type'], $this->types)) break;
                 $this->stats->gather($this->instr, $this->args);
                 return $this->xml->addXML($this->instr, $this->args);
             case "label":
@@ -348,7 +355,7 @@ class Parser {
                 $this->stats->gather($this->instr, $this->args);
                 return $this->xml->addXML($this->instr, $this->args);
             case "var_symb":
-                if ($this->args[0]['type'] != 'var' || !in_array($this->args[1]['type'], $this->symb)) break;
+                if ($this->args[0]['type'] != 'var' || !in_array($this->args[1]['type'], $this->types)) break;
                 $this->stats->gather($this->instr, $this->args);
                 return $this->xml->addXML($this->instr, $this->args);
             case "var_type":
@@ -356,11 +363,11 @@ class Parser {
                 $this->stats->gather($this->instr, $this->args);
                 return $this->xml->addXML($this->instr, $this->args);
             case "var_symb_symb":
-                if ($this->args[0]['type'] != 'var' || !in_array($this->args[1]['type'], $this->symb) || !in_array($this->args[2]['type'], $this->symb)) break;
+                if ($this->args[0]['type'] != 'var' || !in_array($this->args[1]['type'], $this->types) || !in_array($this->args[2]['type'], $this->types)) break;
                 $this->stats->gather($this->instr, $this->args);
                 return $this->xml->addXML($this->instr, $this->args);
             case "label_symb_symb":
-                if ($this->args[0]['type'] != 'label' || !in_array($this->args[1]['type'], $this->symb) || !in_array($this->args[2]['type'], $this->symb)) break;
+                if ($this->args[0]['type'] != 'label' || !in_array($this->args[1]['type'], $this->types) || !in_array($this->args[2]['type'], $this->types)) break;
                 $this->stats->gather($this->instr, $this->args);
                 return $this->xml->addXML($this->instr, $this->args);
             default:
@@ -394,6 +401,7 @@ class Parser {
             # splits the line into an array of arguments
             $elements = preg_split('/\s+/', trim($line[0]));
             $this->instr = strtoupper($elements[0]);
+
             # parses the arguments of the instructions and sets their types and values
             $this->args = array_map(array($this, 'parseArg'), array_slice($elements,1));
 
