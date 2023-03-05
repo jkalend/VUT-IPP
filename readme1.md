@@ -1,6 +1,15 @@
+Documentation of Project Implementation for IPP 2022/2023  
+Name and surname: Jan Kalenda  
+Login: xkalen07  
+
+# Description
+A parser for the IPPcode23 language. The parser reads the IPPcode23 program from the standard input and outputs the XML representation of the program to the standard output. The parser also collects statistics about the program and outputs them to the specified files.
+
 # Usage
-`./ipkcpc [--help] [--stats=FILE] [--stats FILE] [--fwdjumps] [--backjumps] [--badjumps] [--jumps] [--labels] [--loc] [--comments] [--eol] [--print=STRING] [--print STRING] [--frequent]`
-where
+`./ipkcpc [--help] [--stats=FILE] [--stats FILE] [--fwdjumps] [--backjumps] [--badjumps]`  
+`[--jumps] [--labels] [--loc] [--comments] [--eol] [--print=STRING] [--print STRING] [--frequent]`  
+
+where:
 - `--help` prints the usage of the program
 - `--stats` required for other flags, specifies the file where the statistics will be saved to
 - `--fwdjumps` counts the number of forward jumps
@@ -35,3 +44,6 @@ where
 ## Parser
 - Class used to parse a IPPcode23 program
 - `parse()` method parses the program and builds up the XML using the XMLCreator class
+
+# Diagram
+![Diagram](IPP1_UML.drawio.png)
