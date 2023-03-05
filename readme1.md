@@ -6,8 +6,7 @@ Login: xkalen07
 A parser for the IPPcode23 language. The parser reads the IPPcode23 program from the standard input and outputs the XML representation of the program to the standard output. The parser also collects statistics about the program and outputs them to the specified files.
 
 # Usage
-`./ipkcpc [--help] [--stats=FILE] [--stats FILE] [--fwdjumps] [--backjumps] [--badjumps]`  
-`[--jumps] [--labels] [--loc] [--comments] [--eol] [--print=STRING] [--print STRING] [--frequent]`  
+`./ipkcpc [--help] [--stats=FILE] [--stats FILE] [--fwdjumps] [--backjumps] [--badjumps] [--jumps] [--labels] [--loc] [--comments] [--eol] [--print=STRING] [--print STRING] [--frequent]`  
 
 where:
 - `--help` prints the usage of the program
