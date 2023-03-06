@@ -6,7 +6,7 @@ Login: xkalen07
 A parser for the IPPcode23 language. The parser reads the IPPcode23 program from the standard input and outputs the XML representation of the program to the standard output. The parser also collects statistics about the program and outputs them to the specified files.
 
 # Usage
-`./ipkcpc [--help] [--stats=FILE] [--stats FILE] [--fwdjumps] [--backjumps] [--badjumps] [--jumps] [--labels] [--loc] [--comments] [--eol] [--print=STRING] [--print STRING] [--frequent]`  
+`parse.php [--help] [--stats=FILE] [--stats FILE] [--fwdjumps] [--backjumps] [--badjumps] [--jumps] [--labels] [--loc] [--comments] [--eol] [--print=STRING] [--print STRING] [--frequent]`  
 
 where:
 - `--help` prints the usage of the program
@@ -23,6 +23,7 @@ where:
 - `--prints` prints the STRING
 
 # Classes
+The program is divided into four distinct classes, each is a singleton.
 ## ArgParse
 - Class used to parse command line arguments
 - Arguments are parsed when the object is constructed
@@ -45,4 +46,5 @@ where:
 - `parse()` method parses the program and builds up the XML using the XMLCreator class
 
 # Diagram
-![Diagram](IPP1_UML.drawio.png)
+
+![Diagram](img/IPP1_UML.drawio.png)
