@@ -1,4 +1,4 @@
-Documentation of Project Implementation for IPP 2022/2023  
+Documentation of Project Implementation for IPP 2022/2023 part I   
 Name and surname: Jan Kalenda  
 Login: xkalen07  
 
