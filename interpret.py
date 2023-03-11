@@ -217,8 +217,6 @@ class Interpret:
                 self.operations[instruction.opcode](instruction)
         except StopIteration:
             return
-        # except ValueError:
-        #     sys.exit(57)  # int error
 
     def _process_input(self) -> str:
         """Processes input

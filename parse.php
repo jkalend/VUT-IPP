@@ -4,11 +4,14 @@ ini_set('display_errors', 'stderr');
 
 class ArgParse {
     # Class for parsing the command line arguments
-    private $stats_files, $stat_names;
+    
+    # $stat_params - array of stats file names and their arguments
+    # $stat_names - array of stats file names
+    private $stat_params, $stat_names;
 
     function __construct($argv) {
         # parses the command line arguments when initialized
-        $this->stats_files = [];
+        $this->stat_params = [];
         $this->stat_names = [];
         if (in_array("--help", $argv)) {
             if (count($argv) > 2) {
@@ -28,7 +31,7 @@ class ArgParse {
                     fwrite(STDERR, "Duplicate stats file name\n");
                     exit(12);
                 }
-                $this->stats_files[]["stats"] = $name;
+                $this->stat_params[]["stats"] = $name;
                 $this->stat_names[] = $name;
             } elseif (preg_match('/^--stats$/', $argv[$i])) {
                 if ($i + 1 >= count($argv)) {
@@ -46,35 +49,35 @@ class ArgParse {
                     $this->usage();
                     exit(10);
                 }
-                $this->stats_files[]["stats"] = $name;
+                $this->stat_params[]["stats"] = $name;
                 $this->stat_names[] = $name;
-            } elseif (preg_match('/^--loc$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "loc";
-            } elseif (preg_match('/^--comments$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "comments";
-            } elseif (preg_match('/^--labels$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "labels";
-            } elseif (preg_match('/^--jumps$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "jumps";
-            } elseif (preg_match('/^--fwjumps$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "fwjumps";
-            } elseif (preg_match('/^--backjumps$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "backjumps";
-            } elseif (preg_match('/^--badjumps$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "badjumps";
-            } elseif (preg_match('/^--frequent$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "frequent";
-            } elseif (preg_match('/^--print=/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = ["print", preg_replace('/^--print=/', '', $argv[$i])];
-            } elseif (preg_match('/^--print$/', $argv[$i]) && count($this->stats_files) != 0) {
+            } elseif (preg_match('/^--loc$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "loc";
+            } elseif (preg_match('/^--comments$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "comments";
+            } elseif (preg_match('/^--labels$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "labels";
+            } elseif (preg_match('/^--jumps$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "jumps";
+            } elseif (preg_match('/^--fwjumps$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "fwjumps";
+            } elseif (preg_match('/^--backjumps$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "backjumps";
+            } elseif (preg_match('/^--badjumps$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "badjumps";
+            } elseif (preg_match('/^--frequent$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "frequent";
+            } elseif (preg_match('/^--print=/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = ["print", preg_replace('/^--print=/', '', $argv[$i])];
+            } elseif (preg_match('/^--print$/', $argv[$i]) && count($this->stat_params) != 0) {
                 if ($i + 1 >= count($argv)) {
                     fwrite(STDERR, "Missing print argument\n");
                     $this->usage();
                     exit(10);
                 }
-                $this->stats_files[count($this->stats_files) - 1][] = ["print", $argv[++$i]];
-            } elseif (preg_match('/^--eol$/', $argv[$i]) && count($this->stats_files) != 0) {
-                $this->stats_files[count($this->stats_files) - 1][] = "eol";
+                $this->stat_params[count($this->stat_params) - 1][] = ["print", $argv[++$i]];
+            } elseif (preg_match('/^--eol$/', $argv[$i]) && count($this->stat_params) != 0) {
+                $this->stat_params[count($this->stat_params) - 1][] = "eol";
             } else {
                 fwrite(STDERR, "Invalid command line argument\n");
                 $this->usage();
@@ -85,7 +88,7 @@ class ArgParse {
 
     public function fetch_stats() {
         # Getter for the stats files
-        return $this->stats_files;
+        return $this->stat_params;
     }
 
     private function usage() {
@@ -100,6 +103,9 @@ class ArgParse {
 
 class XMLCreator {
     # Class for creating the XML output
+
+    # $xml -  XML object
+    # $order - order of the instruction
     private $xml, $order;
 
     function __construct() {
@@ -131,6 +137,19 @@ class XMLCreator {
 
 class Stats {
     # Class used to gather and write the stats
+
+    # $labels - array of labels
+    # $jumps - number of jumps
+    # $fwjumps - number of forward jumps
+    # $backjumps - number of backward jumps
+    # $badjumps - number of bad jumps
+    # $frequent - array of frequent labels
+    # $jump_istr - static array of jump instructions
+    # $jump_dirs - array of jump directions
+    # $last_call - array of call directions, -1 for backward, 1 for forward, used for return
+    # $stats - array of stats files
+    # $loc - number of instructions
+    # $comments - number of comments
     private $labels, $jumps, $fwjumps, $backjumps, $badjumps, $frequent,
         $jump_istr, $jump_dirs, $last_call, $stats, $loc, $comments;
 
@@ -154,6 +173,8 @@ class Stats {
         $file = false;
         foreach ($this->stats as $i) {
             foreach ($i as $x => $stat) {
+
+                # creates new file
                 if ($x == "stats") {
                     $file = fopen($stat, "w");
                     continue;
@@ -163,6 +184,7 @@ class Stats {
                     continue;
                 }
 
+                # writes the stats
                 if ($stat == "loc") {
                     fwrite($file, $this->loc . "\n");
                 } elseif ($stat == "comments") {
@@ -192,6 +214,8 @@ class Stats {
                     exit(10);
                 }
             }
+
+            # closes the file
             if (is_resource($file)) fclose($file);
         }
     }
@@ -210,18 +234,20 @@ class Stats {
         # Gathers the stats from the instructions
         $this->loc++;
 
+        # add instruction to the array of frequent instructions
         if (!array_key_exists($instr, $this->frequent))
             $this->frequent[$instr] = 0;
         else
             $this->frequent[$instr]++;
 
-
+        # add label to the array of labels
         if ($instr == 'LABEL') {
             if (in_array($args[0]["value"], $this->labels)) return;
             $this->labels[] = $args[0]["value"];
             return;
         }
 
+        # get return direction and increment the number of jumps
         if (in_array($instr, $this->jump_istr)) {
             $this->jumps++;
             if ($instr == 'RETURN') {
@@ -233,11 +259,13 @@ class Stats {
                 return;
             }
 
+            # add jump direction to the array of jump directions, used for bad jumps
             if (!array_key_exists($args[0]["value"], $this->jump_dirs))
                 $this->jump_dirs[$args[0]["value"]] = 1;
             else
                 $this->jump_dirs[$args[0]["value"]]++;
 
+            # count the jumps and sets the last call direction
             if (in_array($args[0]["value"], $this->labels)) {
                 $this->backjumps++;
                 if ($instr == 'CALL')
@@ -258,10 +286,17 @@ class Stats {
 
 class Parser {
     # Class used to parse the input
-    private $zeros, $only_label, $symb_only, $var_only, $var_symb, $var_type, $var_symb_symb,
-        $label_symb_symb, $types, $args, $xml, $argparse, $instr, $stats;
+    
+    # $types - array of types
+    # $args - array of arguments for the instruction
+    # $xml - XMLCreator object
+    # $argparse - ArgParse object
+    # $instr - instruction
+    # $stats - Stats object
+    private $types, $args, $xml, $argparse, $instr, $stats;
 
     function __construct($argv) {
+        # Initialize the objects the parser is composed of
         $this->xml = new XMLCreator();
         $this->argparse = new ArgParse($argv);
         $this->stats = new Stats($this->argparse->fetch_stats());
@@ -291,16 +326,8 @@ class Parser {
             }
         }
 
-        # initialize the instruction arrays
+        # initialize the types
         $this->types = ["var", "int", "bool", "string", "nil"];
-        $this->zeros = ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"];
-        $this->only_label = ["CALL", "LABEL", "JUMP"];
-        $this->symb_only = ["PUSHS", "EXIT", "DPRINT", "WRITE"];
-        $this->var_only = ["DEFVAR", "POPS"];
-        $this->var_symb = ["MOVE", "INT2CHAR", "STRLEN", "TYPE", "NOT"];
-        $this->var_type = ["READ"];
-        $this->var_symb_symb = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR"];
-        $this->label_symb_symb = ["JUMPIFEQ", "JUMPIFNEQ"];
     }
 
     private function parseArg($arg) {
@@ -339,7 +366,7 @@ class Parser {
         exit(23);
     }
 
-    private function check_ops($x) {
+    private function check_args($x) {
         # check if the instruction arguments are of a valid type and add them to the XML
         switch ($x) {
             case "var":
@@ -378,12 +405,23 @@ class Parser {
     }
 
     private function invalid_args() {
+        # if the instruction has invalid number of arguments print an error and exit
         fwrite(STDERR ,"Invalid number of instruction arguments\n");
         exit(23);
     }
     
     public function parse() {
         # main function for parsing the input
+
+        $zeros = ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"];
+        $only_label = ["CALL", "LABEL", "JUMP"];
+        $symb_only = ["PUSHS", "EXIT", "DPRINT", "WRITE"];
+        $var_only = ["DEFVAR", "POPS"];
+        $var_symb = ["MOVE", "INT2CHAR", "STRLEN", "TYPE", "NOT"];
+        $var_type = ["READ"];
+        $var_symb_symb = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR"];
+        $label_symb_symb = ["JUMPIFEQ", "JUMPIFNEQ"];
+        
         while ($line = fgets(STDIN)) {
 
             # skips the comments and empty lines
@@ -406,31 +444,31 @@ class Parser {
             $this->args = array_map(array($this, 'parseArg'), array_slice($elements,1));
 
             # checks if the instruction opcode is valid and if the number of arguments is correct
-            if (in_array($this->instr, $this->zeros)) {
+            if (in_array($this->instr, $zeros)) {
                 if (count($elements) != 1) $this->invalid_args();
                 $this->stats->gather($this->instr, $this->args);
                 $this->xml->addXML($this->instr, $this->args);
-            } elseif (in_array($this->instr, $this->only_label)) {
+            } elseif (in_array($this->instr, $only_label)) {
                 if (count($elements) != 2) $this->invalid_args();
-                $this->check_ops("label");
-            } elseif (in_array($this->instr, $this->var_only)) {
+                $this->check_args("label");
+            } elseif (in_array($this->instr, $var_only)) {
                 if (count($elements) != 2) $this->invalid_args();
-                $this->check_ops("var");
-            } elseif (in_array($this->instr, $this->symb_only)) {
+                $this->check_args("var");
+            } elseif (in_array($this->instr, $symb_only)) {
                 if (count($elements) != 2) $this->invalid_args();
-                $this->check_ops("symb");
-            } elseif (in_array($this->instr, $this->var_symb)) {
+                $this->check_args("symb");
+            } elseif (in_array($this->instr, $var_symb)) {
                 if (count($elements) != 3) $this->invalid_args();
-                $this->check_ops("var_symb");
-            } elseif (in_array($this->instr, $this->var_type)) {
+                $this->check_args("var_symb");
+            } elseif (in_array($this->instr, $var_type)) {
                 if (count($elements) != 3) $this->invalid_args();
-                $this->check_ops("var_type");
-            } elseif (in_array($this->instr, $this->var_symb_symb)) {
+                $this->check_args("var_type");
+            } elseif (in_array($this->instr, $var_symb_symb)) {
                 if (count($elements) != 4) $this->invalid_args();
-                $this->check_ops("var_symb_symb");
-            } elseif (in_array($this->instr, $this->label_symb_symb)) {
+                $this->check_args("var_symb_symb");
+            } elseif (in_array($this->instr, $label_symb_symb)) {
                 if (count($elements) != 4) $this->invalid_args();
-                $this->check_ops("label_symb_symb");
+                $this->check_args("label_symb_symb");
             } elseif ($this->instr == ".IPPCODE23") {
                 fwrite(STDERR ,"Invalid additional header\n");
                 exit(22);
