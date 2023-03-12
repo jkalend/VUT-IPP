@@ -49,11 +49,14 @@ The program is divided into four distinct classes, each is a singleton.
 - `inc_comments()` increments the number of comments
 - `gather($instr, $args)` method that takes the instruction and list of its arguments as an associative list and collects the statistics
 - `create()` instantiates the class and returns the instance
+- `get_stats()` returns the list of statistics
+- `output_stats()` prints the statistics to the specified files
 
 ## Parser
 - Class used to parse a IPPcode23 program
 - `parse()` method parses the program and builds up the XML using the XMLCreator class
 - `create()` instantiates the class and returns the instance
+- `usage()` prints the usage of the program
 
 # Diagram
 

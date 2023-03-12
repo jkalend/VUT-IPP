@@ -2,7 +2,7 @@
 
 ini_set('display_errors', 'stderr');
 
-class ArgParse {
+class IPPArgParse {
     # Class for parsing the command line arguments
 
     private static $instance;
@@ -18,10 +18,10 @@ class ArgParse {
         if (in_array("--help", $argv)) {
             if (count($argv) > 2) {
                 fwrite(STDERR ,"Invalid number of arguments\n");
-                $this->usage();
+                Parser::usage();
                 exit(10);
             }
-            $this->usage();
+            Parser::usage();
             exit(0);
         }
 
@@ -38,17 +38,17 @@ class ArgParse {
             } elseif (preg_match('/^--stats$/', $argv[$i])) {
                 if ($i + 1 >= count($argv)) {
                     fwrite(STDERR, "Missing stats file name\n");
-                    $this->usage();
+                    Parser::usage();
                     exit(10);
                 }
                 $name = $argv[++$i];
                 if (in_array($name, $this->stat_names)) {
                     fwrite(STDERR, "Duplicate stats file name\n");
-                    $this->usage();
+                    Parser::usage();
                     exit(12);
                 } elseif (preg_match('/^--/', $name)) {
                     fwrite(STDERR, "Invalid stats file name\n");
-                    $this->usage();
+                    Parser::usage();
                     exit(10);
                 }
                 $this->stat_params[]["stats"] = $name;
@@ -74,7 +74,7 @@ class ArgParse {
             } elseif (preg_match('/^--print$/', $argv[$i]) && count($this->stat_params) != 0) {
                 if ($i + 1 >= count($argv)) {
                     fwrite(STDERR, "Missing print argument\n");
-                    $this->usage();
+                    Parser::usage();
                     exit(10);
                 }
                 $this->stat_params[count($this->stat_params) - 1][] = ["print", $argv[++$i]];
@@ -82,7 +82,7 @@ class ArgParse {
                 $this->stat_params[count($this->stat_params) - 1][] = "eol";
             } else {
                 fwrite(STDERR, "Invalid command line argument\n");
-                $this->usage();
+                Parser::usage();
                 exit(10);
             }
         }
@@ -91,7 +91,7 @@ class ArgParse {
     public static function create($argv) {
         # Creates the instance of the singleton
         if (!isset(self::$instance)) {
-            self::$instance = new ArgParse($argv);
+            self::$instance = new IPPArgParse($argv);
         }
         return self::$instance;
     }
@@ -99,15 +99,6 @@ class ArgParse {
     public function fetch_stats() {
         # Getter for the stats files
         return $this->stat_params;
-    }
-
-    public function usage() {
-        # Prints the usage
-        fwrite(STDOUT ,"Usage: parse.php [--help] [--stats FILE] [--stats=FILE]
-         [--loc] [--comments] [--labels] [--jumps] [--fwjumps] [--backjumps]
-         [--badjumps] [--frequent] [--print=FILE] [--print FILE] [--eol]
-         \nAccepts file contents on stdin and outputs XML to stdout.
-         \n--stats have to be specified before any other stats argument.\n");
     }
 }
 
@@ -342,16 +333,16 @@ class Parser {
     # $types - array of types
     # $args - array of arguments for the instruction
     # $xml - XMLCreator object
-    # $argparse - ArgParse object
+    # $IPPArgParse - IPPArgParse object
     # $instr - instruction
     # $stats - Stats object
-    private $types, $args, $xml, $argparse, $instr, $stats;
+    private $types, $args, $xml, $IPPArgParse, $instr, $stats;
 
     private function __construct($argv) {
         # Initialize the objects the parser is composed of
         $this->xml = XMLCreator::create();
-        $this->argparse = ArgParse::create($argv);
-        $this->stats = Stats::create($this->argparse->fetch_stats());
+        $this->IPPArgParse = IPPArgParse::create($argv);
+        $this->stats = Stats::create($this->IPPArgParse->fetch_stats());
 
         # read the header
         while (true) {
@@ -540,12 +531,13 @@ class Parser {
         $this->xml->outputXML();
     }
 
-    public function output_stats() {
-        $this->stats->output_stats();
-    }
-
-    public function output_xml() {
-        $this->xml->outputXML();
+    public static function usage() {
+        # Prints the usage
+        fwrite(STDOUT ,"Usage: parse.php [--help] [--stats FILE] [--stats=FILE]
+         [--loc] [--comments] [--labels] [--jumps] [--fwjumps] [--backjumps]
+         [--badjumps] [--frequent] [--print=FILE] [--print FILE] [--eol]
+         \nAccepts file contents on stdin and outputs XML to stdout.1
+         \n--stats have to be specified before any other stats argument.\n");
     }
 }
 
