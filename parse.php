@@ -4,12 +4,14 @@ ini_set('display_errors', 'stderr');
 
 class ArgParse {
     # Class for parsing the command line arguments
+
+    private static $instance;
     
     # $stat_params - array of stats file names and their arguments
     # $stat_names - array of stats file names
     private $stat_params, $stat_names;
 
-    function __construct($argv) {
+    private function __construct($argv) {
         # parses the command line arguments when initialized
         $this->stat_params = [];
         $this->stat_names = [];
@@ -86,12 +88,20 @@ class ArgParse {
         }
     }
 
+    public static function create($argv) {
+        # Creates the instance of the singleton
+        if (!isset(self::$instance)) {
+            self::$instance = new ArgParse($argv);
+        }
+        return self::$instance;
+    }
+
     public function fetch_stats() {
         # Getter for the stats files
         return $this->stat_params;
     }
 
-    private function usage() {
+    public function usage() {
         # Prints the usage
         fwrite(STDOUT ,"Usage: parse.php [--help] [--stats FILE] [--stats=FILE]
          [--loc] [--comments] [--labels] [--jumps] [--fwjumps] [--backjumps]
@@ -104,13 +114,23 @@ class ArgParse {
 class XMLCreator {
     # Class for creating the XML output
 
+    private static $instance;
+
     # $xml -  XML object
     # $order - order of the instruction
     private $xml, $order;
 
-    function __construct() {
+    private function __construct() {
         $this->order = 1;
         $this->xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><program language="IPPcode23"></program>');
+    }
+
+    public static function create() {
+        # Creates the instance of the singleton
+        if (!isset(self::$instance)) {
+            self::$instance = new XMLCreator();
+        }
+        return self::$instance;
     }
 
     public function addXML($name, $args) {
@@ -138,6 +158,8 @@ class XMLCreator {
 class Stats {
     # Class used to gather and write the stats
 
+    private static $instance;
+
     # $labels - array of labels
     # $jumps - number of jumps
     # $fwjumps - number of forward jumps
@@ -153,7 +175,7 @@ class Stats {
     private $labels, $jumps, $fwjumps, $backjumps, $badjumps, $frequent,
         $jump_istr, $jump_dirs, $last_call, $stats, $loc, $comments;
 
-    function __construct($stats) {
+    private function __construct($stats) {
         $this->stats = $stats;
         $this->loc = 0;
         $this->comments = 0;
@@ -170,54 +192,15 @@ class Stats {
 
     function __destruct() {
         # writes the stats to the files when the parser is done
-        $file = false;
-        foreach ($this->stats as $i) {
-            foreach ($i as $x => $stat) {
+        $this->output_stats();
+    }
 
-                # creates new file
-                if ($x == "stats") {
-                    $file = fopen($stat, "w");
-                    continue;
-                }
-                if (is_array($stat)) {
-                    fwrite($file, $stat[1] . "\n");
-                    continue;
-                }
-
-                # writes the stats
-                if ($stat == "loc") {
-                    fwrite($file, $this->loc . "\n");
-                } elseif ($stat == "comments") {
-                    fwrite($file, $this->comments . "\n");
-                } elseif ($stat == "labels") {
-                    fwrite($file, count($this->labels) . "\n");
-                } elseif ($stat == "jumps") {
-                    fwrite($file, $this->jumps . "\n");
-                } elseif ($stat == "fwjumps") {
-                    fwrite($file, $this->fwjumps . "\n");
-                } elseif ($stat == "backjumps") {
-                    fwrite($file, $this->backjumps . "\n");
-                } elseif ($stat == "badjumps") {
-                    $this->get_badjumps();
-                    fwrite($file, $this->badjumps . "\n");
-                } elseif ($stat == "frequent") {
-                    arsort($this->frequent);
-                    $comma = count($this->frequent);
-                    foreach ($this->frequent as $instr => $count) {
-                        fwrite($file, $instr);
-                        if (--$comma > 0) fwrite($file, ",");
-                    }
-                    fwrite($file, "\n");
-                } elseif ($stat == "eol") {
-                    fwrite($file, "\n");
-                } else {
-                    exit(10);
-                }
-            }
-
-            # closes the file
-            if (is_resource($file)) fclose($file);
+    public static function create($stats) {
+        # Creates the instance of the singleton
+        if (!isset(self::$instance)) {
+            self::$instance = new Stats($stats);
         }
+        return self::$instance;
     }
 
     private function get_badjumps() {
@@ -282,10 +265,79 @@ class Stats {
         # increments the number of comments
         $this->comments++;
     }
+
+    public function get_stats() {
+        # returns the stats
+        $this->get_badjumps();
+        return [
+            "loc" => $this->loc,
+            "comments" => $this->comments,
+            "labels" => count($this->labels),
+            "jumps" => $this->jumps,
+            "fwjumps" => $this->fwjumps,
+            "backjumps" => $this->backjumps,
+            "badjumps" => $this->badjumps,
+            "frequent" => $this->frequent
+        ];
+    }
+
+    public function output_stats() {
+        # outputs the stats to the files
+        $file = false;
+        $this->get_badjumps();
+        foreach ($this->stats as $i) {
+            foreach ($i as $x => $stat) {
+
+                # creates new file
+                if ($x == "stats") {
+                    $file = fopen($stat, "w");
+                    continue;
+                }
+                if (is_array($stat)) {
+                    fwrite($file, $stat[1] . "\n");
+                    continue;
+                }
+
+                # writes the stats
+                if ($stat == "loc") {
+                    fwrite($file, $this->loc . "\n");
+                } elseif ($stat == "comments") {
+                    fwrite($file, $this->comments . "\n");
+                } elseif ($stat == "labels") {
+                    fwrite($file, count($this->labels) . "\n");
+                } elseif ($stat == "jumps") {
+                    fwrite($file, $this->jumps . "\n");
+                } elseif ($stat == "fwjumps") {
+                    fwrite($file, $this->fwjumps . "\n");
+                } elseif ($stat == "backjumps") {
+                    fwrite($file, $this->backjumps . "\n");
+                } elseif ($stat == "badjumps") {
+                    fwrite($file, $this->badjumps . "\n");
+                } elseif ($stat == "frequent") {
+                    arsort($this->frequent);
+                    $comma = count($this->frequent);
+                    foreach ($this->frequent as $instr => $count) {
+                        fwrite($file, $instr);
+                        if (--$comma > 0) fwrite($file, ",");
+                    }
+                    fwrite($file, "\n");
+                } elseif ($stat == "eol") {
+                    fwrite($file, "\n");
+                } else {
+                    exit(10);
+                }
+            }
+
+            # closes the file
+            if (is_resource($file)) fclose($file);
+        }
+    }
 }
 
 class Parser {
     # Class used to parse the input
+
+    private static $instance;
     
     # $types - array of types
     # $args - array of arguments for the instruction
@@ -295,11 +347,11 @@ class Parser {
     # $stats - Stats object
     private $types, $args, $xml, $argparse, $instr, $stats;
 
-    function __construct($argv) {
+    private function __construct($argv) {
         # Initialize the objects the parser is composed of
-        $this->xml = new XMLCreator();
-        $this->argparse = new ArgParse($argv);
-        $this->stats = new Stats($this->argparse->fetch_stats());
+        $this->xml = XMLCreator::create();
+        $this->argparse = ArgParse::create($argv);
+        $this->stats = Stats::create($this->argparse->fetch_stats());
 
         # read the header
         while (true) {
@@ -328,6 +380,14 @@ class Parser {
 
         # initialize the types
         $this->types = ["var", "int", "bool", "string", "nil"];
+    }
+
+    public static function create($argv) {
+        # Creates the instance of the singleton
+        if (!isset(self::$instance)) {
+            self::$instance = new Parser($argv);
+        }
+        return self::$instance;
     }
 
     private function parseArg($arg) {
@@ -479,7 +539,15 @@ class Parser {
         }
         $this->xml->outputXML();
     }
+
+    public function output_stats() {
+        $this->stats->output_stats();
+    }
+
+    public function output_xml() {
+        $this->xml->outputXML();
+    }
 }
 
-$parser = new Parser($argv);
+$parser = Parser::create($argv);
 $parser->parse();

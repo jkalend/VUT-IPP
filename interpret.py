@@ -84,19 +84,19 @@ class XMLParser:
         if not instruction.attrib["order"].isdigit() or int(instruction.attrib["order"]) < 0:
             print("order not digit or negative", file=sys.stderr)
             sys.exit(32)
-        if instruction.attrib["opcode"] not in ["MOVE", "CREATEFRAME", "PUSHFRAME", "POPFRAME", "DEFVAR", "CALL", "RETURN",
-                                      "PUSHS",
-                                      "POPS", "ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "NOT",
-                                      "INT2CHAR", "STRI2INT", "READ", "WRITE", "CONCAT", "STRLEN", "GETCHAR",
-                                      "SETCHAR",
-                                      "TYPE", "LABEL", "JUMP", "JUMPIFEQ", "JUMPIFNEQ", "EXIT", "DPRINT", "BREAK"]:
+        if instruction.attrib["opcode"] not in ["MOVE", "CREATEFRAME", "PUSHFRAME", "POPFRAME", "DEFVAR", "CALL",
+                                                "RETURN", "PUSHS", "POPS", "ADD", "SUB", "MUL", "IDIV", "LT", "GT",
+                                                "EQ", "AND", "OR", "NOT", "INT2CHAR", "STRI2INT", "READ", "WRITE",
+                                                "CONCAT", "STRLEN", "GETCHAR", "SETCHAR", "TYPE", "LABEL", "JUMP",
+                                                "JUMPIFEQ", "JUMPIFNEQ", "EXIT", "DPRINT", "BREAK"]:
             print("opcode bad", file=sys.stderr)
             sys.exit(32)
         if instruction.attrib["opcode"] in ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"]:
             if len(instruction) > 0:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
-        if instruction.attrib["opcode"] in ["CALL", "LABEL", "JUMP", "PUSHS", "EXIT", "DPRINT", "WRITE", "DEFVAR", "POPS"]:
+        if instruction.attrib["opcode"] in ["CALL", "LABEL", "JUMP", "PUSHS", "EXIT",
+                                            "DPRINT", "WRITE", "DEFVAR", "POPS"]:
             if len(instruction) != 1:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
@@ -104,8 +104,8 @@ class XMLParser:
             if len(instruction) != 2:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
-        if instruction.attrib["opcode"] in ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT",
-                                  "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]:
+        if instruction.attrib["opcode"] in ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT",
+                                            "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]:
             if len(instruction) != 3:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)

@@ -34,11 +34,13 @@ The program is divided into four distinct classes, each is a singleton.
 - Class used to parse command line arguments
 - Arguments are parsed when the object is constructed
 - `fetch_stats()` method returns the list of parsed stats arguments
+- `create()` instantiates the class and returns the instance
 
 ## XMLCreator
 - Class used to initiate, manage and output the XML string
 - `addXML()` Method that takes the instruction and list of its arguments and adds it to the XML
 - `outputXML()` Prints the XML to the standard output
+- `create()` instantiates the class and returns the instance
 
 ## Stats
 - Class collecting statistics about the IPPcode program
@@ -46,10 +48,12 @@ The program is divided into four distinct classes, each is a singleton.
 - bad jump is a jump to a nonexistent label
 - `inc_comments()` increments the number of comments
 - `gather($instr, $args)` method that takes the instruction and list of its arguments as an associative list and collects the statistics
+- `create()` instantiates the class and returns the instance
 
 ## Parser
 - Class used to parse a IPPcode23 program
 - `parse()` method parses the program and builds up the XML using the XMLCreator class
+- `create()` instantiates the class and returns the instance
 
 # Diagram
 
