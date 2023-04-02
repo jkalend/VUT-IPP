@@ -9,6 +9,7 @@ from xml.etree.ElementTree import Element
 
 class ArgumentParser:
     """Class for parsing arguments from command line"""
+
     def __init__(self):
         self.parser = argparse.ArgumentParser(prog='Interpret XML',
                                               description='Interprets XML code made by parse.php'
@@ -32,6 +33,7 @@ class ArgumentParser:
 
 class XMLParser:
     """Class for parsing XML file"""
+
     def __init__(self):
         self.args = ArgumentParser().parse()
         self.root = self._parse()
@@ -133,7 +135,7 @@ class XMLParser:
         """
         indexes = []
 
-        for index, arg in enumerate(instruction):
+        for arg in instruction:
             try:
                 indexes.append(int(arg.tag[3:]))
             except ValueError:
@@ -175,6 +177,7 @@ class XMLParser:
 
 class Instruction:
     """Class for storing instruction"""
+
     def __init__(self, instruction, index):
         self.instruction = instruction
         self.opcode = instruction.attrib['opcode']
@@ -194,12 +197,13 @@ class Instruction:
         instruction = list(instruction)
         instruction.sort(key=lambda x: int(x.tag[3:]))
 
-        return [arg for arg in instruction]
+        return list(instruction)
 
 
 @dataclass
 class Variable:
     """Class for storing variable"""
+
     value: Any = None
     name: str = ""
     type: str = ""
@@ -207,6 +211,7 @@ class Variable:
 
 class Frame:
     """Class for simulating frame"""
+
     def __init__(self):
         self.frame = {}
 
@@ -228,9 +233,10 @@ class Frame:
 
 class Interpret:
     """Class for interpreting IPPcode23 code"""
+
     def __init__(self):
         self.xml = XMLParser()
-        self.instructions = [instruction for instruction in self.xml.get_instructions()]
+        self.instructions = list(self.xml.get_instructions())
         self.instructions.sort(key=lambda x: int(x.attrib['order']))
         self.instructions = [Instruction(instr, index) for index, instr in enumerate(self.instructions)]
 
@@ -395,7 +401,7 @@ class Interpret:
                           options: str = "",
                           first=False,
                           dest=False,
-                          type=False) -> Tuple[Variable, List[Variable]]:
+                          take_type=False) -> Tuple[Variable, List[Variable]]:
         """Returns list of arguments for instruction
 
         Exits with 53 if type is not compatible
@@ -403,7 +409,7 @@ class Interpret:
         :param options: string of types (int, string, bool, nil) as isbn
         :param first: if first argument should be accounted for
         :param dest: destination variable should be accounted for, returns tuple
-        :param type: if type is being checked
+        :param take_type: if type is being checked
         :return: list of arguments or tuple when dest is True
         """
         arg = []
@@ -414,11 +420,11 @@ class Interpret:
             get(instruction.args[0].text.split('@')[1]) if dest else None
 
         for i in instruction.args[start:]:
-            if i.attrib['type'] == 'var' and not type:
+            if i.attrib['type'] == 'var' and not take_type:
                 var = var if (var := self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])).type != "" \
                     else sys.exit(56)
                 arg.append(var) if limit in (var.type, "") else sys.exit(53)
-            elif i.attrib['type'] == 'var' and type:
+            elif i.attrib['type'] == 'var' and take_type:
                 var = var if (var := self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])) \
                     else sys.exit(56)
                 arg.append(var)
@@ -755,7 +761,7 @@ class Interpret:
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "isbn", dest=True, type=True)
+        dest, arg = self._instruction_args(instruction, "isbn", dest=True, take_type=True)
         dest.value, dest.type = arg[0].type, "string"
 
     def _label(self, instruction: Instruction) -> None:
