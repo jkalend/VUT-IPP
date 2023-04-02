@@ -43,28 +43,35 @@ class XMLParser:
         :return: root of XML file
         """
         if self.args.source is None:
-            return ET.fromstring(self._load_xml())
-        else:
             try:
-                return ET.parse(self.args.source).getroot()
+                return ET.fromstring(self._load_xml())
             except ET.ParseError:
-                print("Error: XML file is not valid")
+                print("Error: XML file is not valid", file=sys.stderr)
                 sys.exit(31)
 
-    def _load_xml(self) -> str:
+        try:
+            return ET.parse(self.args.source).getroot()
+        except (ET.ParseError, FileNotFoundError):
+            print("Error: XML file is not valid", file=sys.stderr)
+            sys.exit(31)
+
+    @staticmethod
+    def _load_xml() -> str:
         """Loads XML file from stdin
 
         :return: XML file as string
         """
         return sys.stdin.read()
-    
+
     def _check_xml(self) -> None:
+        """Checks XML file for validity"""
         self._check_root()
         for i in self.root:
             self._check_instructions(i)
             self._check_args(i)
-                    
+
     def _check_root(self) -> None:
+        """Checks root of XML file for validity"""
         for i in self.root.attrib:
             if i not in ["name", "description", "language"]:
                 print("bad attribute for program", file=sys.stderr)
@@ -73,8 +80,12 @@ class XMLParser:
         if "language" not in self.root.attrib or self.root.attrib["language"].lower() != "ippcode23":
             print("language bad", file=sys.stderr)
             sys.exit(32)
-            
+
     def _check_instructions(self, instruction: Element) -> None:
+        """Checks instructions for validity
+
+        :param instruction: instruction to check
+        """
         if instruction.tag != "instruction":
             print("instr bad", file=sys.stderr)
             sys.exit(32)
@@ -113,10 +124,22 @@ class XMLParser:
             print(f"order {instruction.attrib['order']} already used", file=sys.stderr)
             sys.exit(32)
         self.orders.append(instruction.attrib["order"])
-                
-    def _check_args(self, instruction: Element) -> None:
+
+    @staticmethod
+    def _check_args(instruction: Element) -> None:
+        """Checks arguments for validity
+
+        :param instruction: instruction to check
+        """
+        indexes = []
+
         for index, arg in enumerate(instruction):
-            if arg.tag != "arg" + str(index + 1):
+            try:
+                indexes.append(int(arg.tag[3:]))
+            except ValueError:
+                print(f"bad arg tag {arg.tag}", file=sys.stderr)
+                sys.exit(32)
+            if not arg.tag.startswith("arg"):
                 print(f"bad arg tag {arg.tag}", file=sys.stderr)
                 sys.exit(32)
             if "type" not in arg.attrib:
@@ -127,6 +150,11 @@ class XMLParser:
                 sys.exit(32)
             if arg.text is None:
                 print(f"text missing for arg {arg.tag}", file=sys.stderr)
+                sys.exit(32)
+
+        for i in range(1, len(indexes) + 1):
+            if i not in indexes:
+                print(f"arg {i} missing", file=sys.stderr)
                 sys.exit(32)
 
     def get_input(self) -> TextIO:
@@ -147,21 +175,26 @@ class XMLParser:
 
 class Instruction:
     """Class for storing instruction"""
-    def __init__(self, instruction):
+    def __init__(self, instruction, index):
         self.instruction = instruction
         self.opcode = instruction.attrib['opcode']
         self.args = self._get_args(instruction)
-        self.index = int(instruction.attrib['order']) - 1
+        self.index = index
 
-    def _get_args(self, instruction: Element) -> List[Element]:
+    @staticmethod
+    def _get_args(instruction: Element) -> List[Element]:
         """Returns arguments of given instruction
 
         :param instruction: instruction
         :return: list of arguments
         """
-        sys.exit(32) if int(instruction.attrib['order']) < 1 else None
+        if int(instruction.attrib['order']) < 1:
+            sys.exit(32)
 
-        return [instruction.find(arg.tag) for arg in instruction if instruction.find(arg.tag) is not None]
+        instruction = list(instruction)
+        instruction.sort(key=lambda x: int(x.tag[3:]))
+
+        return [arg for arg in instruction]
 
 
 @dataclass
@@ -197,17 +230,20 @@ class Interpret:
     """Class for interpreting IPPcode23 code"""
     def __init__(self):
         self.xml = XMLParser()
-        self.instructions = [Instruction(instruction) for instruction in self.xml.get_instructions()]
+        self.instructions = [instruction for instruction in self.xml.get_instructions()]
+        self.instructions.sort(key=lambda x: int(x.attrib['order']))
+        self.instructions = [Instruction(instr, index) for index, instr in enumerate(self.instructions)]
+
         self.labels = self._get_labels()
         self.input = self.xml.get_input()
         self.operations = self._init_operations()
         self.temporary_frame = None
         self.frame_stack = []
         self.global_frame = Frame()
-        self.current = iter(self.instructions)
         self.call_stack = []
         self.data_stack = []
-        self.instructions.sort(key=lambda x: x.index)
+
+        self.current = iter(self.instructions)
 
     def run(self) -> None:
         """Runs the program"""
@@ -225,11 +261,11 @@ class Interpret:
         """
         if self.input is not None:
             return in_data if (in_data := self.input.readline()) != '' else "nil"
-        else:
-            try:
-                return input()
-            except EOFError:
-                return "nil"
+
+        try:
+            return input()
+        except EOFError:
+            return "nil"
 
     def _process_output(self, var: Variable) -> None:
         """Processes output
@@ -245,7 +281,8 @@ class Interpret:
         elif var.type == 'nil':
             print('', end='')
 
-    def _process_bool(self, value: str) -> bool:
+    @staticmethod
+    def _process_bool(value: str) -> bool:
         """Processes bool value
 
         :param value: value to be processed
@@ -253,7 +290,8 @@ class Interpret:
         """
         return True if value == 'true' else False
 
-    def _int(self, value: str) -> int:
+    @staticmethod
+    def _int(value: str) -> int:
         """Processes int value
 
         :param value: value to be processed
@@ -261,10 +299,14 @@ class Interpret:
         """
         if re.match(r'^[+-]?0[Xx]', value):
             return int(value, 16)
-        elif re.match(r'^[+-]?0[Oo]?', value):
+        if re.match(r'^[+-]?0[Oo]?', value):
             return int(value, 8)
         else:
-            return int(value)
+            try:
+                return int(value)
+            except ValueError:
+                print(f"bad int value {value}", file=sys.stderr)
+                sys.exit(32)
 
     def _get_labels(self) -> Dict[str, Instruction]:
         """Yields dictionary of labels
@@ -278,13 +320,14 @@ class Interpret:
                 labels[label] = instruction if label not in labels else sys.exit(52)
         return labels
 
-    def _parse_string(self, string: str) -> str:
+    @staticmethod
+    def _parse_string(string: str) -> str:
         """Parses string from IPPcode23 format
 
         :param string: string to be parsed
         :return: parsed string
         """
-        return re.sub(r'\\(\d{3})', lambda x: chr(int(x.group(1))), string)
+        return re.sub(r'\\(\d{3})', lambda x: chr(int(x.group(1))), string.strip())
 
     def _init_operations(self) -> Dict[str, Callable]:
         """Initializes dictionary of operations
@@ -339,11 +382,11 @@ class Interpret:
         """
         if frame == 'GF':
             return self.global_frame
-        elif frame == 'LF':
+        if frame == 'LF':
             if len(self.frame_stack) == 0:
                 sys.exit(55)
             return self.frame_stack[-1]
-        elif frame == 'TF':
+        if frame == 'TF':
             if self.temporary_frame is None:
                 sys.exit(55)
             return self.temporary_frame
@@ -351,14 +394,16 @@ class Interpret:
     def _instruction_args(self, instruction: Instruction,
                           options: str = "",
                           first=False,
-                          dest=False) -> Tuple[Variable, List[Variable]]:
+                          dest=False,
+                          type=False) -> Tuple[Variable, List[Variable]]:
         """Returns list of arguments for instruction
 
         Exits with 53 if type is not compatible
         :param instruction: instruction
-        :param options: string of types (string, int, bool, nil) as isbn
+        :param options: string of types (int, string, bool, nil) as isbn
         :param first: if first argument should be accounted for
         :param dest: destination variable should be accounted for, returns tuple
+        :param type: if type is being checked
         :return: list of arguments or tuple when dest is True
         """
         arg = []
@@ -369,10 +414,14 @@ class Interpret:
             get(instruction.args[0].text.split('@')[1]) if dest else None
 
         for i in instruction.args[start:]:
-            if i.attrib['type'] == 'var':
+            if i.attrib['type'] == 'var' and not type:
                 var = var if (var := self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])).type != "" \
                     else sys.exit(56)
-                arg.append(var) if var.type == limit or limit == "" else sys.exit(53)
+                arg.append(var) if limit in (var.type, "") else sys.exit(53)
+            elif i.attrib['type'] == 'var' and type:
+                var = var if (var := self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])) \
+                    else sys.exit(56)
+                arg.append(var)
             elif i.attrib['type'] == 'string' and 's' in options:
                 arg.append(Variable(value=self._parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int' and 'i' in options:
@@ -488,7 +537,7 @@ class Interpret:
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "i")
+        dest, arg = self._instruction_args(instruction, "i", dest=True)
         dest.value, dest.type = arg[0].value * arg[1].value, 'int'
 
     def _idiv(self, instruction: Instruction) -> None:
@@ -507,7 +556,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self._instruction_args(instruction, "ibs", dest=True)
-        dest.value = (True if arg[0].value < arg[1].value else False) if arg[0].type == arg[1].type else sys.exit(53)
+        dest.value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
 
     def _gt(self, instruction: Instruction) -> None:
@@ -516,7 +565,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self._instruction_args(instruction, "ibs", dest=True)
-        dest.value = (True if arg[0].value > arg[1].value else False) if arg[0].type == arg[1].type else sys.exit(53)
+        dest.value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
 
     def _eq(self, instruction: Instruction) -> None:
@@ -530,11 +579,11 @@ class Interpret:
         if arg[0].type == 'nil' and arg[1].type == 'nil':
             dest.value = True
             return
-        elif arg[0].type == 'nil' or arg[1].type == 'nil':
+        if arg[0].type == 'nil' or arg[1].type == 'nil':
             dest.value = False
             return
 
-        dest.value = (True if arg[0].value == arg[1].value else False) if arg[0].type == arg[1].type else sys.exit(53)
+        dest.value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
 
     def _and(self, instruction: Instruction) -> None:
         """Performs logical and on arg1 and arg2 and stores result in variable
@@ -706,7 +755,7 @@ class Interpret:
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "isbn", dest=True)
+        dest, arg = self._instruction_args(instruction, "isbn", dest=True, type=True)
         dest.value, dest.type = arg[0].type, "string"
 
     def _label(self, instruction: Instruction) -> None:
