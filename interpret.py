@@ -415,9 +415,11 @@ class Interpret:
         arg = []
         limit = {"s": "string", "i": "int", "b": "bool", "n": "nil"}[options] if len(options) == 1 else ""
         start = 0 if first else 1
-        destination = \
-            self._get_frame(instruction.args[0].text.split('@')[0]).\
-            get(instruction.args[0].text.split('@')[1]) if dest else None
+        if dest:
+            destination = \
+                self._get_frame(instruction.args[0].text.split('@')[0]).\
+                get(instruction.args[0].text.split('@')[1]) if instruction.args[0].attrib['type'] == 'var' \
+                else sys.exit(53)
 
         for i in instruction.args[start:]:
             if i.attrib['type'] == 'var' and not take_type:
@@ -447,6 +449,8 @@ class Interpret:
 
         :param instruction: MOVE instruction to be processed
         """
+        if instruction.args[0].attrib['type'] != 'var':
+            sys.exit(53)
         dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         arg = instruction.args[1]
         if arg.attrib['type'] == 'var':
@@ -486,7 +490,9 @@ class Interpret:
     def _defvar(self, instruction: Instruction) -> None:
         """Defines variable in a frame"""
         var = instruction.args[0].text.split('@')
-        self._get_frame(var[0]).add(var[1])
+        if instruction.args[0].attrib['type'] != 'var':
+            sys.exit(53)
+        self._get_frame(var[0]).add(var[1]) if len(var) == 2 else sys.exit(52)
 
     def _call(self, instruction: Instruction) -> None:
         """Stores current instruction and jumps to label
@@ -634,6 +640,9 @@ class Interpret:
         Exits with 53 if types are not compatible
         Exits with 58 if index is out of range or char is not in range of ord()
         """
+        if instruction.args[0].attrib['type'] != 'var':
+            sys.exit(53)
+
         dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         arg = []
         if instruction.args[1].attrib['type'] == 'var':
@@ -659,6 +668,9 @@ class Interpret:
 
     def _read(self, instruction: Instruction) -> None:
         """Reads input from stdin and stores it in variable"""
+        if instruction.args[0].attrib['type'] != 'var':
+            sys.exit(53)
+
         dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         in_data = self._process_input()
         if in_data == "nil":
@@ -700,6 +712,9 @@ class Interpret:
         Exits with 58 if index is out of bounds
         Exits with 53 if types are not compatible
         """
+        if instruction.args[0].attrib['type'] != 'var':
+            sys.exit(53)
+
         dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         arg = []
         if instruction.args[1].attrib['type'] == 'var':
@@ -729,7 +744,10 @@ class Interpret:
         Exits with 58 if index is out of bounds
         Exits with 53 if types are not compatible
         """
-        dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
+        if instruction.args[0].attrib['type'] != 'var':
+            sys.exit(53)
+
+        dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])     
         if dest.type != 'string':
             sys.exit(53)
         arg = []
