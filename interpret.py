@@ -97,11 +97,15 @@ class XMLParser:
         if not instruction.attrib["order"].isdigit() or int(instruction.attrib["order"]) < 0:
             print("order not digit or negative", file=sys.stderr)
             sys.exit(32)
+
+        instruction.attrib["opcode"] = instruction.attrib["opcode"].upper()
+
         if instruction.attrib["opcode"] not in ["MOVE", "CREATEFRAME", "PUSHFRAME", "POPFRAME", "DEFVAR", "CALL",
                                                 "RETURN", "PUSHS", "POPS", "ADD", "SUB", "MUL", "IDIV", "LT", "GT",
                                                 "EQ", "AND", "OR", "NOT", "INT2CHAR", "STRI2INT", "READ", "WRITE",
                                                 "CONCAT", "STRLEN", "GETCHAR", "SETCHAR", "TYPE", "LABEL", "JUMP",
-                                                "JUMPIFEQ", "JUMPIFNEQ", "EXIT", "DPRINT", "BREAK"]:
+                                                "JUMPIFEQ", "JUMPIFNEQ", "EXIT", "DPRINT", "BREAK", "INT2FLOAT",
+                                                "FLOAT2INT", "DIV"]:
             print("opcode bad", file=sys.stderr)
             sys.exit(32)
         if instruction.attrib["opcode"] in ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"]:
@@ -113,12 +117,13 @@ class XMLParser:
             if len(instruction) != 1:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
-        if instruction.attrib["opcode"] in ["MOVE", "INT2CHAR", "STRLEN", "TYPE", "NOT", "READ"]:
+        if instruction.attrib["opcode"] in ["MOVE", "INT2CHAR", "STRLEN", "TYPE",
+                                            "NOT", "READ", "INT2FLOAT", "FLOAT2INT"]:
             if len(instruction) != 2:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
-        if instruction.attrib["opcode"] in ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT",
-                                            "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]:
+        if instruction.attrib["opcode"] in ["ADD", "SUB", "MUL", "IDIV", "DIV", "LT", "GT", "EQ", "AND", "OR",
+                                            "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]:
             if len(instruction) != 3:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
@@ -136,18 +141,16 @@ class XMLParser:
         indexes = []
 
         for arg in instruction:
-            try:
-                indexes.append(int(arg.tag[3:]))
-            except ValueError:
+            if len(arg.tag) < 4 or not arg.tag[3:].isnumeric() or not arg.tag.startswith("arg"):
                 print(f"bad arg tag {arg.tag}", file=sys.stderr)
                 sys.exit(32)
-            if not arg.tag.startswith("arg"):
-                print(f"bad arg tag {arg.tag}", file=sys.stderr)
-                sys.exit(32)
+
+            indexes.append(int(arg.tag[3:]))
+
             if "type" not in arg.attrib:
                 print(f"type missing for arg {arg.tag}", file=sys.stderr)
                 sys.exit(32)
-            if arg.attrib["type"] not in ["var", "symb", "label", "type", "nil", "int", "bool", "string"]:
+            if arg.attrib["type"] not in ["var", "label", "nil", "int", "bool", "string", "type", "float"]:
                 print(f"type bad for arg {arg.tag}", file=sys.stderr)
                 sys.exit(32)
             if arg.text is None:
@@ -228,7 +231,7 @@ class Frame:
 
         :param var: variable to add
         """
-        self.frame[var] = Variable(name=var)
+        self.frame[var] = Variable(name=var) if var not in self.frame.keys() else sys.exit(52)
 
 
 class Interpret:
@@ -240,9 +243,9 @@ class Interpret:
         self.instructions.sort(key=lambda x: int(x.attrib['order']))
         self.instructions = [Instruction(instr, index) for index, instr in enumerate(self.instructions)]
 
-        self.labels = self._get_labels()
+        self.labels = self.__get_labels()
         self.input = self.xml.get_input()
-        self.operations = self._init_operations()
+        self.operations = self.__init_operations()
         self.temporary_frame = None
         self.frame_stack = []
         self.global_frame = Frame()
@@ -260,7 +263,7 @@ class Interpret:
         except StopIteration:
             return
 
-    def _process_input(self) -> str:
+    def __process_input(self) -> str:
         """Processes input
 
         :return: input as string
@@ -273,48 +276,74 @@ class Interpret:
         except EOFError:
             return "nil"
 
-    def _process_output(self, var: Variable) -> None:
+    def __process_output(self, var: Variable) -> None:
         """Processes output
 
         :param var: variable to be printed
         """
         if var.type == 'string':
-            print(self._parse_string(var.value), end='')
+            print(self.__parse_string(var.value), end='')
         elif var.type == 'int':
             print(var.value, end='')
         elif var.type == 'bool':
             print('true', end='') if var.value else print('false', end='')
         elif var.type == 'nil':
             print('', end='')
+        elif var.type == 'float':
+            print(var.value.hex(), end='')
 
     @staticmethod
-    def _process_bool(value: str) -> bool:
+    def __process_bool(value: str) -> bool | str:
         """Processes bool value
 
         :param value: value to be processed
-        :return: processed value as bool
+        :return: processed value as bool, "nil" on bad value when reading
         """
         return True if value == 'true' else False
 
     @staticmethod
-    def _int(value: str) -> int:
+    def __int(value: str, read: bool = False) -> int | str:
         """Processes int value
 
         :param value: value to be processed
-        :return: processed value as int
+        :param read: if True, return "nil" on bad value
+        :return: processed value as int, "nil" on bad value when reading
         """
-        if re.match(r'^[+-]?0[Xx]', value):
+        if re.match(r'^[+-]?0[Xx][a-fA-F0-9]+$', value):
             return int(value, 16)
-        if re.match(r'^[+-]?0[Oo]?', value):
+        elif re.match(r'^[+-]?0[Oo]?[0-7]+$', value):
             return int(value, 8)
+        elif re.match(r'^[+-]?\d+$', value):
+            return int(value, 10)
+        elif read:
+            return "nil"
         else:
-            try:
-                return int(value)
-            except ValueError:
-                print(f"bad int value {value}", file=sys.stderr)
-                sys.exit(32)
+            print(f"bad int value {value}", file=sys.stderr)
+            sys.exit(32)
 
-    def _get_labels(self) -> Dict[str, Instruction]:
+    @staticmethod
+    def __float(value: str, read: bool = False) -> float | str:
+        """Processes float value
+
+        :param value: value to be processed
+        :param read: if True, return "nil" on bad value
+        :return: processed value as float
+        """
+        if re.match(r'^[+-]?(\d*[.])?\d*$', value):
+            return float(value)
+        elif re.match(r'^[+-]?0[Xx][a-fA-F0-9]+$', value):
+            return float.fromhex(value)
+        elif re.match(r'^[+-]?\d+$', value):
+            return float(value)
+        elif re.match(r'^[+-]?(0[xX])?[01]\.?[0-9a-fA-F]*([pP][+-]?\d+)?$', value):
+            return float.fromhex(value)
+        elif read:
+            return "nil"
+        else:
+            print(f"bad float value {value}", file=sys.stderr)
+            sys.exit(32)
+
+    def __get_labels(self) -> Dict[str, Instruction]:
         """Yields dictionary of labels
 
         :return: dictionary of labels
@@ -327,58 +356,74 @@ class Interpret:
         return labels
 
     @staticmethod
-    def _parse_string(string: str) -> str:
+    def __parse_string(string: str) -> str:
         """Parses string from IPPcode23 format
 
         :param string: string to be parsed
         :return: parsed string
         """
-        return re.sub(r'\\(\d{3})', lambda x: chr(int(x.group(1))), string.strip())
+        return re.sub(r'\\(\d{3})', lambda x: chr(int(x.group(1))), string.replace("\n", ""))
 
-    def _init_operations(self) -> Dict[str, Callable]:
+    @staticmethod
+    def __get_type(A: Any, B: Any) -> str:
+        """Returns resulting type of an operation on 2 variables
+
+        :param A: first variable
+        :param B: second variable
+        :return: resulting type of variables
+        """
+        if A == B:
+            return A
+        elif A == 'float' or B == 'float':
+            return 'float'
+
+    def __init_operations(self) -> Dict[str, Callable]:
         """Initializes dictionary of operations
 
         :return: dictionary of operations
         """
         return {
-            "MOVE": self._move,
-            "CREATEFRAME": self._createframe,
-            "PUSHFRAME": self._pushframe,
-            "POPFRAME": self._popframe,
-            "DEFVAR": self._defvar,
-            "CALL": self._call,
-            "RETURN": self._return,
-            "PUSHS": self._pushs,
-            "POPS": self._pops,
-            "ADD": self._add,
-            "SUB": self._sub,
-            "MUL": self._mul,
-            "IDIV": self._idiv,
-            "LT": self._lt,
-            "GT": self._gt,
-            "EQ": self._eq,
-            "AND": self._and,
-            "OR": self._or,
-            "NOT": self._not,
-            "INT2CHAR": self._int2char,
-            "STRI2INT": self._stri2int,
-            "READ": self._read,
-            "WRITE": self._write,
-            "CONCAT": self._concat,
-            "STRLEN": self._strlen,
-            "GETCHAR": self._getchar,
-            "SETCHAR": self._setchar,
-            "TYPE": self._type,
-            "LABEL": self._label,
-            "JUMP": self._jump,
-            "JUMPIFEQ": self._jumpifeq,
-            "JUMPIFNEQ": self._jumpifneq,
-            "EXIT": self._exit,
-            "DPRINT": self._dprint,
-            "BREAK": self._break,
+            "MOVE": self.__move,
+            "CREATEFRAME": self.__createframe,
+            "PUSHFRAME": self.__pushframe,
+            "POPFRAME": self.__popframe,
+            "DEFVAR": self.__defvar,
+            "CALL": self.__call,
+            "RETURN": self.__return,
+            "PUSHS": self.__pushs,
+            "POPS": self.__pops,
+            "ADD": self.__add,
+            "SUB": self.__sub,
+            "MUL": self.__mul,
+            "IDIV": self.__idiv,
+            "DIV": self.__div,
+            "LT": self.__lt,
+            "GT": self.__gt,
+            "EQ": self.__eq,
+            "AND": self.__and,
+            "OR": self.__or,
+            "NOT": self.__not,
+            "INT2CHAR": self.___int2char,
+            "INT2FLOAT": self.__int2float,
+            "FLOAT2INT": self.__float2int,
+            "STRI2INT": self.__stri2int,
+            "READ": self.__read,
+            "WRITE": self.__write,
+            "CONCAT": self.__concat,
+            "STRLEN": self.__strlen,
+            "GETCHAR": self.__getchar,
+            "SETCHAR": self.__setchar,
+            "TYPE": self.__type,
+            "LABEL": self.__label,
+            "JUMP": self.__jump,
+            "JUMPIFEQ": self.__jumpifeq,
+            "JUMPIFNEQ": self.__jumpifneq,
+            "EXIT": self.__exit,
+            "DPRINT": self.__dprint,
+            "BREAK": self.__break,
         }
 
-    def _get_frame(self, frame: str) -> Frame:
+    def __get_frame(self, frame: str) -> Frame:
         """Yields frame based on frame tag
 
         exits with 55 if frame is not defined
@@ -397,7 +442,7 @@ class Interpret:
                 sys.exit(55)
             return self.temporary_frame
 
-    def _instruction_args(self, instruction: Instruction,
+    def __instruction_args(self, instruction: Instruction,
                           options: str = "",
                           first=False,
                           dest=False,
@@ -406,73 +451,63 @@ class Interpret:
 
         Exits with 53 if type is not compatible
         :param instruction: instruction
-        :param options: string of types (int, string, bool, nil) as isbn
+        :param options: string of types (int, string, bool, nil, float, type) as isbnft
         :param first: if first argument should be accounted for
         :param dest: destination variable should be accounted for, returns tuple
         :param take_type: if type is being checked
         :return: list of arguments or tuple when dest is True
         """
         arg = []
-        limit = {"s": "string", "i": "int", "b": "bool", "n": "nil"}[options] if len(options) == 1 else ""
+        limit = {"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float"}[options] if len(options) == 1 else ""
         start = 0 if first else 1
         if dest:
+            if instruction.args[0].attrib['type'] != 'var' or len(instruction.args[0].text.split('@')) != 2:
+                sys.exit(53)
             destination = \
-                self._get_frame(instruction.args[0].text.split('@')[0]).\
+                self.__get_frame(instruction.args[0].text.split('@')[0]).\
                 get(instruction.args[0].text.split('@')[1]) if instruction.args[0].attrib['type'] == 'var' \
                 else sys.exit(53)
 
         for i in instruction.args[start:]:
             if i.attrib['type'] == 'var' and not take_type:
-                var = var if (var := self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])).type != "" \
+                var = var if (var := self.__get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])).type != "" \
                     else sys.exit(56)
                 arg.append(var) if limit in (var.type, "") else sys.exit(53)
             elif i.attrib['type'] == 'var' and take_type:
-                var = var if (var := self._get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])) \
+                var = var if (var := self.__get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])) \
                     else sys.exit(56)
                 arg.append(var)
             elif i.attrib['type'] == 'string' and 's' in options:
-                arg.append(Variable(value=self._parse_string(i.text), type='string'))
+                arg.append(Variable(value=self.__parse_string(i.text), type='string'))
             elif i.attrib['type'] == 'int' and 'i' in options:
-                arg.append(Variable(value=self._int(i.text), type='int'))
+                arg.append(Variable(value=self.__int(i.text), type='int'))
             elif i.attrib['type'] == 'bool' and 'b' in options:
-                arg.append(Variable(value=self._process_bool(i.text), type='bool'))
+                arg.append(Variable(value=self.__process_bool(i.text), type='bool'))
             elif i.attrib['type'] == 'nil' and 'n' in options:
                 arg.append(Variable(value=i.text, type='nil'))
+            elif i.attrib['type'] == 'float' and 'f' in options:
+                arg.append(Variable(value=self.__float(i.text), type='float'))
+            elif i.attrib['type'] == 'type' and 't' in options:
+                arg.append(Variable(value=i.text, type='type'))
             else:
                 sys.exit(53)
         return (destination, arg) if dest else arg
 
-    def _move(self, instruction: Instruction) -> None:
+    def __move(self, instruction: Instruction) -> None:
         """Moves value into a variable
 
         Exits with 56 if variable is not defined
 
         :param instruction: MOVE instruction to be processed
         """
-        if instruction.args[0].attrib['type'] != 'var':
-            sys.exit(53)
-        dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
-        arg = instruction.args[1]
-        if arg.attrib['type'] == 'var':
-            var = var if (var := self._get_frame(arg.text.split('@')[0]).get(arg.text.split('@')[1])).type != ""\
-                else sys.exit(56)
-            dest.value, dest.type = var.value, var.type
-        elif arg.attrib['type'] == 'int':
-            dest.value, dest.type = self._int(arg.text), 'int'
-        elif arg.attrib['type'] == 'bool':
-            dest.value, dest.type = self._process_bool(arg.text), 'bool'
-        elif arg.attrib['type'] == 'string':
-            dest.value, dest.type = self._parse_string(arg.text), 'string'
-        elif arg.attrib['type'] == 'nil':
-            dest.value, dest.type = 'nil', 'nil'
-        else:
-            sys.exit(53)
+        dest, arg = self.__instruction_args(instruction, "isbnf", dest=True)
+        dest.value, dest.type = arg[0].value, arg[0].type
 
-    def _createframe(self, instruction: Instruction) -> None:
+    def __createframe(self, instruction: Instruction) -> None:
         """Creates temporary frame"""
         self.temporary_frame = Frame()
 
-    def _pushframe(self, instruction: Instruction) -> None:
+    def __pushframe(self, instruction: Instruction) -> None:
         """Pushes temporary frame into frame stack
 
         Exits with 55 if temporary frame is not defined
@@ -480,112 +515,120 @@ class Interpret:
         self.frame_stack.append(self.temporary_frame) if self.temporary_frame is not None else sys.exit(55)
         self.temporary_frame = None
 
-    def _popframe(self, instruction: Instruction) -> None:
+    def __popframe(self, instruction: Instruction) -> None:
         """Pops frame from frame stack and sets it as temporary frame
 
         Exits with 55 if frame stack is empty
         """
         self.temporary_frame = self.frame_stack.pop() if len(self.frame_stack) > 0 else sys.exit(55)
 
-    def _defvar(self, instruction: Instruction) -> None:
+    def __defvar(self, instruction: Instruction) -> None:
         """Defines variable in a frame"""
         var = instruction.args[0].text.split('@')
-        if instruction.args[0].attrib['type'] != 'var':
+        if instruction.args[0].attrib['type'] != 'var' or len(var) != 2:
             sys.exit(53)
-        self._get_frame(var[0]).add(var[1]) if len(var) == 2 else sys.exit(52)
+        self.__get_frame(var[0]).add(var[1]) if len(var) == 2 else sys.exit(52)
 
-    def _call(self, instruction: Instruction) -> None:
+    def __call(self, instruction: Instruction) -> None:
         """Stores current instruction and jumps to label
 
         Exits with 52 if label is not defined
         """
         label = instruction.args[0].text
-        if label not in self.labels:
-            sys.exit(52)
-        self.call_stack.append(self.current)
+        self.call_stack.append(self.current) if label in self.labels else sys.exit(52)
         self.current = iter(self.instructions[self.labels[label].index:])
 
-    def _return(self, instruction: Instruction) -> None:
+    def __return(self, instruction: Instruction) -> None:
         """Returns to instruction stored in call stack
 
         Exits with 56 if call stack is empty
         """
         self.current = self.call_stack.pop() if len(self.call_stack) > 0 else sys.exit(56)
 
-    def _pushs(self, instruction: Instruction) -> None:
+    def __pushs(self, instruction: Instruction) -> None:
         """Pushes value onto data stack
 
         Exits with 56 if variable is not defined
         """
-        self.data_stack.append(self._instruction_args(instruction, "isbn", first=True)[0])
+        self.data_stack.append(self.__instruction_args(instruction, "isbnf", first=True)[0])
 
-    def _pops(self, instruction: Instruction) -> None:
+    def __pops(self, instruction: Instruction) -> None:
         """Pops value from data stack and stores it in variable
 
         Exits with 56 if data stack is empty
         """
-        dest, _ = self._instruction_args(instruction, "", dest=True)
+        dest, _ = self.__instruction_args(instruction, "", dest=True)
         popped = self.data_stack.pop() if len(self.data_stack) > 0 else sys.exit(56)
         dest.value, dest.type = popped.value, popped.type
 
-    def _add(self, instruction: Instruction) -> None:
+    def __add(self, instruction: Instruction) -> None:
         """Adds two values and stores them in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "i", dest=True)
-        dest.value, dest.type = arg[0].value + arg[1].value, 'int'
+        dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        dest.value, dest.type = arg[0].value + arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
-    def _sub(self, instruction: Instruction) -> None:
+    def __sub(self, instruction: Instruction) -> None:
         """Subtracts two values and stores them in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "i", dest=True)
-        dest.value, dest.type = arg[0].value - arg[1].value, 'int'
+        dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        dest.value, dest.type = arg[0].value - arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
-    def _mul(self, instruction: Instruction) -> None:
+    def __mul(self, instruction: Instruction) -> None:
         """Multiplies two values and stores them in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "i", dest=True)
-        dest.value, dest.type = arg[0].value * arg[1].value, 'int'
+        dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        dest.value, dest.type = arg[0].value * arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
-    def _idiv(self, instruction: Instruction) -> None:
+    def __div(self, instruction: Instruction) -> None:
         """Divides two values and stores them in variable
 
         Exits with 53 if types are not compatible
         Exits with 57 if dividing by zero
         """
-        dest, arg = self._instruction_args(instruction, "i", dest=True)
+        dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        dest.value = arg[0].value / arg[1].value if arg[1].value != 0 else sys.exit(57)
+        dest.type = 'float'
+
+    def __idiv(self, instruction: Instruction) -> None:
+        """Divides two values and stores them in variable
+
+        Exits with 53 if types are not compatible
+        Exits with 57 if dividing by zero
+        """
+        dest, arg = self.__instruction_args(instruction, "i", dest=True)
         dest.value = arg[0].value // arg[1].value if arg[1].value != 0 else sys.exit(57)
         dest.type = 'int'
 
-    def _lt(self, instruction: Instruction) -> None:
+    def __lt(self, instruction: Instruction) -> None:
         """Compares whether arg1 is lesser than arg2 and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "ibs", dest=True)
+        dest, arg = self.__instruction_args(instruction, "ibsf", dest=True)
         dest.value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
 
-    def _gt(self, instruction: Instruction) -> None:
+    def __gt(self, instruction: Instruction) -> None:
         """Compares whether arg1 is greater than arg2 and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "ibs", dest=True)
+        dest, arg = self.__instruction_args(instruction, "ibsf", dest=True)
         dest.value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
 
-    def _eq(self, instruction: Instruction) -> None:
+    def __eq(self, instruction: Instruction) -> None:
         """Compares whether arg1 and arg2 are equal and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "ibsn", dest=True)
+        dest, arg = self.__instruction_args(instruction, "ibsnf", dest=True)
         dest.type = 'bool'
 
         if arg[0].type == 'nil' and arg[1].type == 'nil':
@@ -597,44 +640,64 @@ class Interpret:
 
         dest.value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
 
-    def _and(self, instruction: Instruction) -> None:
+    def __and(self, instruction: Instruction) -> None:
         """Performs logical and on arg1 and arg2 and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "b", dest=True)
+        dest, arg = self.__instruction_args(instruction, "b", dest=True)
         dest.value, dest.type = arg[0].value and arg[1].value, "bool"
 
-    def _or(self, instruction: Instruction) -> None:
+    def __or(self, instruction: Instruction) -> None:
         """Performs logical or on arg1 and arg2 and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "b", dest=True)
+        dest, arg = self.__instruction_args(instruction, "b", dest=True)
         dest.value, dest.type = arg[0].value or arg[1].value, "bool"
 
-    def _not(self, instruction: Instruction) -> None:
+    def __not(self, instruction: Instruction) -> None:
         """Performs logical not on arg1 and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "b", dest=True)
+        dest, arg = self.__instruction_args(instruction, "b", dest=True)
         dest.value, dest.type = not arg[0].value, "bool"
 
-    def _int2char(self, instruction: Instruction) -> None:
+    def ___int2char(self, instruction: Instruction) -> None:
         """Converts int to char and stores result in variable
 
         Exits with 53 if types are not compatible
         Exits with 58 if int is not in range of chr()
         """
-        dest, arg = self._instruction_args(instruction, "i", dest=True)
+        dest, arg = self.__instruction_args(instruction, "i", dest=True)
 
-        try:
-            dest.value, dest.type = chr(arg[0].value), "string"
-        except ValueError:
-            sys.exit(58)
+        dest.value, dest.type = \
+            chr(arg[0].value), "string" if arg[0].value < 0 or arg[0].value > 1114111 else sys.exit(58)
 
-    def _stri2int(self, instruction: Instruction) -> None:
+    def __float2int(self, instruction: Instruction) -> None:
+        """Converts float to int and stores result in variable
+
+        Exits with 53 if types are not compatible
+        """
+        dest, arg = self.__instruction_args(instruction, "f", dest=True)
+        if arg[0].type != 'float':
+            sys.exit(53)
+
+        dest.value, dest.type = int(arg[0].value), "int"
+
+    def __int2float(self, instruction: Instruction) -> None:
+        """Converts int to float and stores result in variable
+
+        Exits with 53 if types are not compatible
+        """
+        dest, arg = self.__instruction_args(instruction, "i", dest=True)
+        if arg[0].type != 'int':
+            sys.exit(53)
+
+        dest.value, dest.type = float(arg[0].value), "float"
+
+    def __stri2int(self, instruction: Instruction) -> None:
         """Converts char to int and stores result in variable
 
         Exits with 53 if types are not compatible
@@ -643,149 +706,100 @@ class Interpret:
         if instruction.args[0].attrib['type'] != 'var':
             sys.exit(53)
 
-        dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
-        arg = []
-        if instruction.args[1].attrib['type'] == 'var':
-            var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
-            arg.append(var) if var.type == "string" else sys.exit(53)
-        elif instruction.args[1].attrib['type'] == 'string':
-            arg.append(Variable(value=self._parse_string(instruction.args[1].text), type='string'))
-        else:
+        dest, arg = self.__instruction_args(instruction, "is", dest=True)
+        if arg[0].type != 'string' or arg[1].type != 'int':
             sys.exit(53)
 
-        if instruction.args[2].attrib['type'] == 'var':
-            var = self._get_frame(instruction.args[2].text.split('@')[0]).get(instruction.args[2].text.split('@')[1])
-            arg.append(var) if var.type == "int" else sys.exit(53)
-        elif instruction.args[2].attrib['type'] == 'int':
-            arg.append(Variable(value=self._int(instruction.args[2].text), type='int'))
-        else:
-            sys.exit(53)
-
-        try:
-            dest.value, dest.type = ord(arg[0].value[arg[1].value]), 'int'
-        except ValueError:
+        if arg[1].value < 0 or arg[1].value >= len(arg[0].value):
             sys.exit(58)
 
-    def _read(self, instruction: Instruction) -> None:
-        """Reads input from stdin and stores it in variable"""
-        if instruction.args[0].attrib['type'] != 'var':
-            sys.exit(53)
+        dest.value, dest.type = ord(arg[0].value[arg[1].value]), 'int'
 
-        dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
-        in_data = self._process_input()
+    def __read(self, instruction: Instruction) -> None:
+        """Reads input from stdin and stores it in variable"""
+        dest, type = self.__instruction_args(instruction, "it", dest=True)
+
+        dest = self.__get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
+        in_data = self.__process_input()
         if in_data == "nil":
             dest.value, dest.type = "nil", "nil"
-        elif instruction.args[1].text == 'int':
-            try:
-                dest.value, dest.type = self._int(in_data), "int"
-            except ValueError:
-                dest.value, dest.type = "nil", "nil"
-        elif instruction.args[1].text == 'bool':
-            dest.value, dest.type = self._process_bool(in_data), 'bool'
-        elif instruction.args[1].text == 'string':
-            dest.value, dest.type = self._parse_string(in_data), 'string'
+        elif type[0].value == 'int':
+            dest.value = self.__int(in_data.strip(), read=True)
+            dest.type = 'int' if dest.value != "nil" else 'nil'
+        elif type[0].value == 'bool':
+            dest.value, dest.type = self.__process_bool(in_data), 'bool'
+        elif type[0].value == 'string':
+            dest.value, dest.type = self.__parse_string(in_data), 'string'
+        elif type[0].value == 'float':
+            dest.value = self.__float(in_data.strip(), read=True)
+            dest.type = 'float' if dest.value != "nil" else 'nil'
 
-    def _write(self, instruction: Instruction) -> None:
+    def __write(self, instruction: Instruction) -> None:
         """Writes value of variable to stdout"""
-        for var in self._instruction_args(instruction, "isbn", first=True):
-            self._process_output(var)
+        for var in self.__instruction_args(instruction, "isbnf", first=True):
+            self.__process_output(var)
 
-    def _concat(self, instruction: Instruction) -> None:
+    def __concat(self, instruction: Instruction) -> None:
         """Concatenates two strings and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "s", dest=True)
+        dest, arg = self.__instruction_args(instruction, "s", dest=True)
         dest.value, dest.type = arg[0].value + arg[1].value, "string"
 
-    def _strlen(self, instruction: Instruction) -> None:
+    def __strlen(self, instruction: Instruction) -> None:
         """Gets length of string and stores result in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "s", dest=True)
+        dest, arg = self.__instruction_args(instruction, "s", dest=True)
         dest.value, dest.type = len(arg[0].value), "int"
 
-    def _getchar(self, instruction: Instruction) -> None:
+    def __getchar(self, instruction: Instruction) -> None:
         """Gets character from string at given index and stores it in variable
 
         Exits with 58 if index is out of bounds
         Exits with 53 if types are not compatible
         """
-        if instruction.args[0].attrib['type'] != 'var':
+        dest, arg = self.__instruction_args(instruction, "si", dest=True)
+
+        if arg[0].type != 'string' or arg[1].type != 'int':
             sys.exit(53)
 
-        dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
-        arg = []
-        if instruction.args[1].attrib['type'] == 'var':
-            var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
-            arg.append(var) if var.type == "string" else sys.exit(53)
-        elif instruction.args[1].attrib['type'] == 'string':
-            arg.append(Variable(value=self._parse_string(instruction.args[1].text), type='string'))
-        else:
-            sys.exit(53)
-
-        if instruction.args[2].attrib['type'] == 'var':
-            var = self._get_frame(instruction.args[2].text.split('@')[0]).get(instruction.args[2].text.split('@')[1])
-            arg.append(var) if var.type == "int" else sys.exit(53)
-        elif instruction.args[2].attrib['type'] == 'int':
-            arg.append(Variable(value=self._int(instruction.args[2].text), type='int'))
-        else:
-            sys.exit(53)
-
-        try:
-            dest.value, dest.type = arg[0].value[arg[1].value], 'string'
-        except IndexError:
+        if arg[1].value < 0 or arg[1].value >= len(arg[0].value):
             sys.exit(58)
 
-    def _setchar(self, instruction: Instruction) -> None:
+        dest.value, dest.type = arg[0].value[arg[1].value], 'string'
+
+    def __setchar(self, instruction: Instruction) -> None:
         """Sets character in string at given index to given character
 
         Exits with 58 if index is out of bounds
         Exits with 53 if types are not compatible
         """
-        if instruction.args[0].attrib['type'] != 'var':
+        dest, arg = self.__instruction_args(instruction, "is", dest=True)
+        if dest.type != 'string' or arg[0].type != 'int' or arg[1].type != 'string':
             sys.exit(53)
 
-        dest = self._get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])     
-        if dest.type != 'string':
-            sys.exit(53)
-        arg = []
-        if instruction.args[1].attrib['type'] == 'var':
-            var = self._get_frame(instruction.args[1].text.split('@')[0]).get(instruction.args[1].text.split('@')[1])
-            arg.append(var) if var.type == "int" else sys.exit(53)
-        elif instruction.args[1].attrib['type'] == 'int':
-            arg.append(Variable(value=self._int(instruction.args[1].text), type='int'))
-        else:
-            sys.exit(53)
-
-        if instruction.args[2].attrib['type'] == 'var':
-            var = self._get_frame(instruction.args[2].text.split('@')[0]).get(instruction.args[2].text.split('@')[1])
-            arg.append(var) if var.type == "string" else sys.exit(53)
-        elif instruction.args[2].attrib['type'] == 'string':
-            arg.append(Variable(value=self._parse_string(instruction.args[2].text), type='string'))
-        else:
-            sys.exit(53)
-
-        try:
-            dest.value =\
-                "".join(list(dest.value)[:arg[0].value] + [arg[1].value[0]] + list(dest.value)[arg[0].value+1:])
-            dest.type = 'string'
-        except IndexError:
+        if len(arg[1].value) == 0 or arg[0].value < 0 or arg[0].value >= len(dest.value):
             sys.exit(58)
 
-    def _type(self, instruction: Instruction) -> None:
+        dest.value = \
+            "".join(list(dest.value)[:arg[0].value] + [arg[1].value[0]] + list(dest.value)[arg[0].value + 1:])
+        dest.type = 'string'
+
+    def __type(self, instruction: Instruction) -> None:
         """Gets type of variable and stores it in variable
 
         Exits with 53 if types are not compatible
         """
-        dest, arg = self._instruction_args(instruction, "isbn", dest=True, take_type=True)
+        dest, arg = self.__instruction_args(instruction, "isbnf", dest=True, take_type=True)
         dest.value, dest.type = arg[0].type, "string"
 
-    def _label(self, instruction: Instruction) -> None:
+    def __label(self, instruction: Instruction) -> None:
         """Creates label"""
 
-    def _jump(self, instruction: Instruction) -> None:
+    def __jump(self, instruction: Instruction) -> None:
         """Jumps to label
 
         Exits with 52 if label does not exist
@@ -794,7 +808,7 @@ class Interpret:
             sys.exit(52)
         self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
 
-    def _jumpifeq(self, instruction: Instruction) -> None:
+    def __jumpifeq(self, instruction: Instruction) -> None:
         """Jumps to label if values are equal
 
         Exits with 52 if label does not exist
@@ -802,7 +816,7 @@ class Interpret:
         """
         if instruction.args[0].text not in self.labels:
             sys.exit(52)
-        arg = self._instruction_args(instruction, "isbn")
+        arg = self.__instruction_args(instruction, "isbnf")
 
         if arg[0].type == arg[1].type:
             if arg[0].value == arg[1].value:
@@ -812,7 +826,7 @@ class Interpret:
         else:
             sys.exit(53)
 
-    def _jumpifneq(self, instruction: Instruction) -> None:
+    def __jumpifneq(self, instruction: Instruction) -> None:
         """Jumps to label if values are not equal
 
         Exits with 52 if label does not exist
@@ -820,7 +834,7 @@ class Interpret:
         """
         if instruction.args[0].text not in self.labels:
             sys.exit(52)
-        arg = self._instruction_args(instruction, "isbn")
+        arg = self.__instruction_args(instruction, "isbnf")
 
         if arg[0].type == arg[1].type:
             if arg[0].value != arg[1].value:
@@ -830,19 +844,19 @@ class Interpret:
         else:
             sys.exit(53)
 
-    def _exit(self, instruction: Instruction) -> None:
+    def __exit(self, instruction: Instruction) -> None:
         """Exits program
 
         Exits with 57 if value is not in range 0-49
         """
-        arg = self._instruction_args(instruction, "i", first=True)
+        arg = self.__instruction_args(instruction, "i", first=True)
         sys.exit(arg[0].value) if 0 <= arg[0].value <= 49 else sys.exit(57)
 
-    def _dprint(self, instruction: Instruction) -> None:
+    def __dprint(self, instruction: Instruction) -> None:
         """Prints value to stderr"""
-        print(self._instruction_args(instruction, "isbn", first=True)[0].value, file=sys.stderr)
+        print(self.__instruction_args(instruction, "isbnf", first=True)[0].value, file=sys.stderr)
 
-    def _break(self, instruction: Instruction) -> None:
+    def __break(self, instruction: Instruction) -> None:
         """Prints debug information"""
         print('BREAK', file=sys.stderr)
         print('Current instruction', instruction.instruction.attrib['order'], file=sys.stderr)
@@ -851,7 +865,7 @@ class Interpret:
             print(i.name, i.value, i.type, file=sys.stderr)
         print('LF', file=sys.stderr)
         if len(self.frame_stack) != 0:
-            for i in self._get_frame('LF').frame:
+            for i in self.__get_frame('LF').frame:
                 print(i.name, i.value, i.type, file=sys.stderr)
         print('TF', file=sys.stderr)
         if self.temporary_frame is not None:
