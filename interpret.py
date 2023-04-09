@@ -167,20 +167,35 @@ class Interpret:
             "PUSHS": self.__pushs,
             "POPS": self.__pops,
             "ADD": self.__add,
+            "ADDS": self.__adds,
             "SUB": self.__sub,
+            "SUBS": self.__subs,
             "MUL": self.__mul,
+            "MULS": self.__muls,
             "IDIV": self.__idiv,
+            "IDIVS": self.__idivs,
             "DIV": self.__div,
+            "DIVS": self.__divs,
             "LT": self.__lt,
+            "LTS": self.__lts,
             "GT": self.__gt,
+            "GTS": self.__gts,
             "EQ": self.__eq,
+            "EQS": self.__eqs,
             "AND": self.__and,
+            "ANDS": self.__ands,
             "OR": self.__or,
+            "ORS": self.__ors,
             "NOT": self.__not,
+            "NOTS": self.__nots,
             "INT2CHAR": self.___int2char,
+            "INT2CHARS": self.__int2chars,
             "INT2FLOAT": self.__int2float,
+            "INT2FLOATS": self.__int2floats,
             "FLOAT2INT": self.__float2int,
+            "FLOAT2INTS": self.__float2ints,
             "STRI2INT": self.__stri2int,
+            "STRI2INTS": self.__stri2ints,
             "READ": self.__read,
             "WRITE": self.__write,
             "CONCAT": self.__concat,
@@ -191,7 +206,9 @@ class Interpret:
             "LABEL": self.__label,
             "JUMP": self.__jump,
             "JUMPIFEQ": self.__jumpifeq,
+            "JUMPIFEQS": self.__jumpifeqs,
             "JUMPIFNEQ": self.__jumpifneq,
+            "JUMPIFNEQS": self.__jumpifneqs,
             "EXIT": self.__exit,
             "DPRINT": self.__dprint,
             "BREAK": self.__break,
@@ -266,6 +283,26 @@ class Interpret:
             else:
                 sys.exit(53)
         return (destination, arg) if dest else arg
+
+    def __get_args_stack(self,
+                         count: int = 0,
+                         options: str = "",) -> List[Variable]:
+
+        limits = []
+        for i in options:
+            limits.append({"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float"}[i])
+
+        args = []
+
+        for i in range(count):
+            var = self.data_stack.pop() if len(self.data_stack) > 0 else sys.exit(56)
+            if var.type in limits or "" in limits:
+                args.insert(0, var)
+            else:
+                sys.exit(53)
+        return args
+
+
 
     def __move(self, instruction: Instruction) -> None:
         """Moves value into a variable
@@ -343,6 +380,15 @@ class Interpret:
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
         dest.value, dest.type = arg[0].value + arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
+    def __adds(self, instruction: Instruction) -> None:
+        """Adds two values and stores them in variable
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(3, "if")
+        arg[0].value, arg[0].type = arg[1].value + arg[2].value, self.__get_type(arg[1].type, arg[2].type)
+        self.data_stack.append(arg[0])
+
     def __sub(self, instruction: Instruction) -> None:
         """Subtracts two values and stores them in variable
 
@@ -350,6 +396,8 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
         dest.value, dest.type = arg[0].value - arg[1].value, self.__get_type(arg[0].type, arg[1].type)
+
+
 
     def __mul(self, instruction: Instruction) -> None:
         """Multiplies two values and stores them in variable
