@@ -27,7 +27,7 @@ class XMLParser:
                 sys.exit(31)
 
         try:
-            return ET.parse(self.args.source).getroot()
+            return ET.parse(self.args.source[0]).getroot()
         except ET.ParseError:
             print("Error: XML file is not valid", file=sys.stderr)
             sys.exit(31)
@@ -79,19 +79,23 @@ class XMLParser:
         instruction.attrib["opcode"] = instruction.attrib["opcode"].upper()
 
         if instruction.attrib["opcode"] not in ["MOVE", "CREATEFRAME", "PUSHFRAME", "POPFRAME", "DEFVAR", "CALL",
-                                                "RETURN", "PUSHS", "POPS", "ADD", "SUB", "MUL", "IDIV", "LT", "GT",
-                                                "EQ", "AND", "OR", "NOT", "INT2CHAR", "STRI2INT", "READ", "WRITE",
-                                                "CONCAT", "STRLEN", "GETCHAR", "SETCHAR", "TYPE", "LABEL", "JUMP",
-                                                "JUMPIFEQ", "JUMPIFNEQ", "EXIT", "DPRINT", "BREAK", "INT2FLOAT",
-                                                "FLOAT2INT", "DIV"]:
+                                                "RETURN", "PUSHS", "POPS", "ADD", "ADDS", "SUB", "SUBS", "MUL", "MULS",
+                                                "IDIV", "IDIVS", "LT", "LTS", "GT", "GTS", "EQ", "EQS", "AND", "ANDS",
+                                                "OR", "ORS", "NOT", "NOTS", "INT2CHAR", "STRI2INT", "INT2CHARS",
+                                                "STRI2INTS", "READ", "WRITE", "CONCAT", "STRLEN", "GETCHAR", "SETCHAR",
+                                                "TYPE", "LABEL", "JUMP", "JUMPIFEQ", "JUMPIFNEQ", "JUMPIFEQS",
+                                                "JUMPIFNEQS", "EXIT", "DPRINT", "BREAK", "INT2FLOAT", "INT2FLOATS",
+                                                "FLOAT2INT", "FLOAT2INTS", "DIV", "DIVS", "CLEARS"]:
             print("opcode bad", file=sys.stderr)
             sys.exit(32)
-        if instruction.attrib["opcode"] in ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"]:
+        if instruction.attrib["opcode"] in ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK", "ADDS", "SUBS",
+                                            "MULS", "IDIVS", "LTS", "GTS", "EQS", "ANDS", "ORS", "NOTS", "INT2CHARS",
+                                            "STRI2INTS", "INT2FLOATS", "FLOAT2INTS", "DIVS", "CLEARS"]:
             if len(instruction) > 0:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
-        if instruction.attrib["opcode"] in ["CALL", "LABEL", "JUMP", "PUSHS", "EXIT",
-                                            "DPRINT", "WRITE", "DEFVAR", "POPS"]:
+        if instruction.attrib["opcode"] in ["CALL", "LABEL", "JUMP", "PUSHS", "EXIT", "DPRINT",
+                                            "WRITE", "DEFVAR", "POPS", "JUMPIFEQS", "JUMPIFNEQS"]:
             if len(instruction) != 1:
                 print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
                 sys.exit(32)
@@ -145,7 +149,7 @@ class XMLParser:
 
         :return: input file or None
         """
-        return open(self.args.input) if self.args.input is not None else None
+        return open(self.args.input[0]) if self.args.input is not None else None
 
     def get_instructions(self) -> Generator[Element, None, None]:
         """Yields instructions from XML file

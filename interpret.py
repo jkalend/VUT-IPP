@@ -166,6 +166,7 @@ class Interpret:
             "RETURN": self.__return,
             "PUSHS": self.__pushs,
             "POPS": self.__pops,
+            "CLEARS": self.__clears,
             "ADD": self.__add,
             "ADDS": self.__adds,
             "SUB": self.__sub,
@@ -188,7 +189,7 @@ class Interpret:
             "ORS": self.__ors,
             "NOT": self.__not,
             "NOTS": self.__nots,
-            "INT2CHAR": self.___int2char,
+            "INT2CHAR": self.__int2char,
             "INT2CHARS": self.__int2chars,
             "INT2FLOAT": self.__int2float,
             "INT2FLOATS": self.__int2floats,
@@ -286,8 +287,7 @@ class Interpret:
 
     def __get_args_stack(self,
                          count: int = 0,
-                         options: str = "",) -> List[Variable]:
-
+                         options: str = "") -> List[Variable]:
         limits = []
         for i in options:
             limits.append({"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float"}[i])
@@ -296,13 +296,12 @@ class Interpret:
 
         for i in range(count):
             var = self.data_stack.pop() if len(self.data_stack) > 0 else sys.exit(56)
+
             if var.type in limits or "" in limits:
                 args.insert(0, var)
             else:
                 sys.exit(53)
         return args
-
-
 
     def __move(self, instruction: Instruction) -> None:
         """Moves value into a variable
@@ -372,21 +371,29 @@ class Interpret:
         popped = self.data_stack.pop() if len(self.data_stack) > 0 else sys.exit(56)
         dest.value, dest.type = popped.value, popped.type
 
+    def __clears(self, instruction: Instruction) -> None:
+        """Clears data stack"""
+        self.data_stack.clear()
+
     def __add(self, instruction: Instruction) -> None:
         """Adds two values and stores them in variable
 
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
         dest.value, dest.type = arg[0].value + arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
     def __adds(self, instruction: Instruction) -> None:
-        """Adds two values and stores them in variable
+        """Adds two values from the stack and stores them in the data stack
 
         Exits with 53 if types are not compatible
         """
-        arg = self.__get_args_stack(3, "if")
-        arg[0].value, arg[0].type = arg[1].value + arg[2].value, self.__get_type(arg[1].type, arg[2].type)
+        arg = self.__get_args_stack(2, "if")
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
+        arg[0].value, arg[0].type = arg[0].value + arg[1].value, self.__get_type(arg[0].type, arg[1].type)
         self.data_stack.append(arg[0])
 
     def __sub(self, instruction: Instruction) -> None:
@@ -395,9 +402,20 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
         dest.value, dest.type = arg[0].value - arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
+    def __subs(self, instruction: Instruction) -> None:
+        """Subtracts two values from the stack and stores them in the data stack
 
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "if")
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
+        arg[0].value, arg[0].type = arg[0].value - arg[1].value, self.__get_type(arg[0].type, arg[1].type)
+        self.data_stack.append(arg[0])
 
     def __mul(self, instruction: Instruction) -> None:
         """Multiplies two values and stores them in variable
@@ -405,7 +423,20 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
         dest.value, dest.type = arg[0].value * arg[1].value, self.__get_type(arg[0].type, arg[1].type)
+
+    def __muls(self, instruction: Instruction) -> None:
+        """Multiplies two values from stack and stores them in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "if")
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
+        arg[0].value, arg[0].type = arg[0].value * arg[1].value, self.__get_type(arg[0].type, arg[1].type)
+        self.data_stack.append(arg[0])
 
     def __div(self, instruction: Instruction) -> None:
         """Divides two values and stores them in variable
@@ -414,8 +445,23 @@ class Interpret:
         Exits with 57 if dividing by zero
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
         dest.value = arg[0].value / arg[1].value if arg[1].value != 0 else sys.exit(57)
         dest.type = 'float'
+
+    def __divs(self, instruction: Instruction) -> None:
+        """Divides two values from stack and stores them in the data stack
+
+        Exits with 53 if types are not compatible
+        Exits with 57 if dividing by zero
+        """
+        arg = self.__get_args_stack(2, "if")
+        if arg[0].type != arg[1].type:
+            sys.exit(53)
+        arg[0].value = arg[0].value / arg[1].value if arg[1].value != 0 else sys.exit(57)
+        arg[0].type = 'float'
+        self.data_stack.append(arg[0])
 
     def __idiv(self, instruction: Instruction) -> None:
         """Divides two values and stores them in variable
@@ -427,6 +473,17 @@ class Interpret:
         dest.value = arg[0].value // arg[1].value if arg[1].value != 0 else sys.exit(57)
         dest.type = 'int'
 
+    def __idivs(self, instruction: Instruction) -> None:
+        """Divides two values from stack and stores them in the data stack
+
+        Exits with 53 if types are not compatible
+        Exits with 57 if dividing by zero
+        """
+        arg = self.__get_args_stack(2, "i")
+        arg[0].value = arg[0].value // arg[1].value if arg[1].value != 0 else sys.exit(57)
+        arg[0].type = 'int'
+        self.data_stack.append(arg[0])
+
     def __lt(self, instruction: Instruction) -> None:
         """Compares whether arg1 is lesser than arg2 and stores result in variable
 
@@ -436,6 +493,16 @@ class Interpret:
         dest.value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
 
+    def __lts(self, instruction: Instruction) -> None:
+        """Compares whether arg1 is lesser than arg2 and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "ibsf")
+        arg[0].value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        arg[0].type = 'bool'
+        self.data_stack.append(arg[0])
+
     def __gt(self, instruction: Instruction) -> None:
         """Compares whether arg1 is greater than arg2 and stores result in variable
 
@@ -444,6 +511,16 @@ class Interpret:
         dest, arg = self.__instruction_args(instruction, "ibsf", dest=True)
         dest.value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
         dest.type = 'bool'
+
+    def __gts(self, instruction: Instruction) -> None:
+        """Compares whether arg1 is greater than arg2 and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "ibsf")
+        arg[0].value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        arg[0].type = 'bool'
+        self.data_stack.append(arg[0])
 
     def __eq(self, instruction: Instruction) -> None:
         """Compares whether arg1 and arg2 are equal and stores result in variable
@@ -462,6 +539,27 @@ class Interpret:
 
         dest.value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
 
+    def __eqs(self, instruction: Instruction) -> None:
+        """Compares whether arg1 and arg2 are equal and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "ibsnf")
+        if arg[0].type == 'nil' and arg[1].type == 'nil':
+            arg[0].value = True
+            arg[0].type = 'bool'
+            self.data_stack.append(arg[0])
+            return
+        if arg[0].type == 'nil' or arg[2].type == 'nil':
+            arg[0].value = False
+            arg[0].type = 'bool'
+            self.data_stack.append(arg[0])
+            return
+
+        arg[0].value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        arg[0].type = 'bool'
+        self.data_stack.append(arg[0])
+
     def __and(self, instruction: Instruction) -> None:
         """Performs logical and on arg1 and arg2 and stores result in variable
 
@@ -469,6 +567,15 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "b", dest=True)
         dest.value, dest.type = arg[0].value and arg[1].value, "bool"
+
+    def __ands(self, instruction: Instruction) -> None:
+        """Performs logical and on arg1 and arg2 and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "b")
+        arg[0].value, arg[0].type = arg[0].value and arg[1].value, "bool"
+        self.data_stack.append(arg[0])
 
     def __or(self, instruction: Instruction) -> None:
         """Performs logical or on arg1 and arg2 and stores result in variable
@@ -478,6 +585,15 @@ class Interpret:
         dest, arg = self.__instruction_args(instruction, "b", dest=True)
         dest.value, dest.type = arg[0].value or arg[1].value, "bool"
 
+    def __ors(self, instruction: Instruction) -> None:
+        """Performs logical or on arg1 and arg2 and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "b")
+        arg[0].value, arg[0].type = arg[0].value or arg[1].value, "bool"
+        self.data_stack.append(arg[0])
+
     def __not(self, instruction: Instruction) -> None:
         """Performs logical not on arg1 and stores result in variable
 
@@ -486,7 +602,16 @@ class Interpret:
         dest, arg = self.__instruction_args(instruction, "b", dest=True)
         dest.value, dest.type = not arg[0].value, "bool"
 
-    def ___int2char(self, instruction: Instruction) -> None:
+    def __nots(self, instruction: Instruction) -> None:
+        """Performs logical not on arg1 and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(1, "b")
+        arg[0].value = not arg[0].value
+        self.data_stack.append(arg[0])
+
+    def __int2char(self, instruction: Instruction) -> None:
         """Converts int to char and stores result in variable
 
         Exits with 53 if types are not compatible
@@ -496,6 +621,17 @@ class Interpret:
 
         dest.value, dest.type = \
             chr(arg[0].value), "string" if arg[0].value < 0 or arg[0].value > 1114111 else sys.exit(58)
+
+    def __int2chars(self, instruction: Instruction) -> None:
+        """Converts int to char and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        Exits with 58 if int is not in range of chr()
+        """
+        arg = self.__get_args_stack(1, "i")
+        arg[0].value, arg[0].type = \
+            chr(arg[0].value), "string" if arg[0].value < 0 or arg[0].value > 1114111 else sys.exit(58)
+        self.data_stack.append(arg[0])
 
     def __float2int(self, instruction: Instruction) -> None:
         """Converts float to int and stores result in variable
@@ -508,6 +644,18 @@ class Interpret:
 
         dest.value, dest.type = int(arg[0].value), "int"
 
+    def __float2ints(self, instruction: Instruction) -> None:
+        """Converts float to int and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(1, "f")
+        if arg[0].type != 'float':
+            sys.exit(53)
+
+        arg[0].value, arg[0].type = int(arg[0].value), "int"
+        self.data_stack.append(arg[0])
+
     def __int2float(self, instruction: Instruction) -> None:
         """Converts int to float and stores result in variable
 
@@ -518,6 +666,18 @@ class Interpret:
             sys.exit(53)
 
         dest.value, dest.type = float(arg[0].value), "float"
+
+    def __int2floats(self, instruction: Instruction) -> None:
+        """Converts int to float and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        """
+        arg = self.__get_args_stack(2, "i")
+        if arg[1].type != 'int':
+            sys.exit(53)
+
+        arg[0].value, arg[0].type = float(arg[1].value), "float"
+        self.data_stack.append(arg[0])
 
     def __stri2int(self, instruction: Instruction) -> None:
         """Converts char to int and stores result in variable
@@ -536,6 +696,22 @@ class Interpret:
             sys.exit(58)
 
         dest.value, dest.type = ord(arg[0].value[arg[1].value]), 'int'
+
+    def __stri2ints(self, instruction: Instruction) -> None:
+        """Converts char to int and stores result in the data stack
+
+        Exits with 53 if types are not compatible
+        Exits with 58 if index is out of range or char is not in range of ord()
+        """
+        arg = self.__get_args_stack(2, "is")
+        if arg[0].type != 'string' or arg[1].type != 'int':
+            sys.exit(53)
+
+        if arg[1].value < 0 or arg[1].value >= len(arg[0].value):
+            sys.exit(58)
+
+        arg[0].value, arg[0].type = ord(arg[0].value[arg[1].value]), 'int'
+        self.data_stack.append(arg[0])
 
     def __read(self, instruction: Instruction) -> None:
         """Reads input from stdin and stores it in variable"""
@@ -648,6 +824,24 @@ class Interpret:
         else:
             sys.exit(53)
 
+    def __jumpifeqs(self, instruction: Instruction) -> None:
+        """Jumps to label if values from stack are equal
+
+        Exits with 52 if label does not exist
+        Exits with 53 if types are not compatible
+        """
+        if instruction.args[0].text not in self.labels:
+            sys.exit(52)
+        arg = self.__get_args_stack(2, "isbnf")
+
+        if arg[0].type == arg[1].type:
+            if arg[0].value == arg[1].value:
+                self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
+        elif arg[0].type == 'nil' or arg[1].type == 'nil':
+            pass
+        else:
+            sys.exit(53)
+
     def __jumpifneq(self, instruction: Instruction) -> None:
         """Jumps to label if values are not equal
 
@@ -657,6 +851,24 @@ class Interpret:
         if instruction.args[0].text not in self.labels:
             sys.exit(52)
         arg = self.__instruction_args(instruction, "isbnf")
+
+        if arg[0].type == arg[1].type:
+            if arg[0].value != arg[1].value:
+                self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
+        elif arg[0].type == 'nil' or arg[1].type == 'nil':
+            self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
+        else:
+            sys.exit(53)
+
+    def __jumpifneqs(self, instruction: Instruction) -> None:
+        """Jumps to label if values from stack are not equal
+
+        Exits with 52 if label does not exist
+        Exits with 53 if types are not compatible
+        """
+        if instruction.args[0].text not in self.labels:
+            sys.exit(52)
+        arg = self.__get_args_stack(2, "isbnf")
 
         if arg[0].type == arg[1].type:
             if arg[0].value != arg[1].value:
