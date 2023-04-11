@@ -1,6 +1,8 @@
 import argparse
 import sys
 
+from Error_enum import Error
+
 
 class ArgumentParser:
     """Class for parsing arguments from command line"""
@@ -24,18 +26,14 @@ class ArgumentParser:
             self.parser.print_help()
             sys.exit(0)
         elif args.help and (args.source is not None or args.input is not None):
-            print("Error: Argument --help cannot be used with any other argument", file=sys.stderr)
-            sys.exit(10)
+            Error.exit(Error.Missing_parameter, "Argument --help cannot be used with any other argument")
 
         if args.source is not None and len(args.source) > 1:
-            print("Error: Argument --source and --input can be used only once", file=sys.stderr)
-            sys.exit(10)
+            Error.exit(Error.Missing_parameter, "Argument --source can be used only once")
         elif args.input is not None and len(args.input) > 1:
-            print("Error: Argument --source and --input can be used only once", file=sys.stderr)
-            sys.exit(10)
+            Error.exit(Error.Missing_parameter, "Argument --input can be used only once")
 
         if args.source is None and args.input is None:
             self.parser.print_help()
-            print("\nError: At least one of the arguments --source or --input must be present", file=sys.stderr)
-            sys.exit(10)
+            Error.exit(Error.Missing_parameter, "At least one of the arguments --source or --input must be present")
         return args

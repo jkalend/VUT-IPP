@@ -1,6 +1,7 @@
-import sys
 from xml.etree.ElementTree import Element
 from typing import List
+
+from Error_enum import Error
 
 class Instruction:
     """Class for storing instruction"""
@@ -19,9 +20,8 @@ class Instruction:
         :return: list of arguments
         """
         if int(instruction.attrib['order']) < 1:
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"invalid order {instruction.attrib['order']}")
 
-        instruction = list(instruction)
-        instruction.sort(key=lambda x: int(x.tag[3:]))
+        instruction = sorted(instruction, key=lambda x: int(x.tag[3:]))
 
         return list(instruction)

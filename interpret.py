@@ -6,6 +6,7 @@ from XMLParser import XMLParser
 from Instruction import Instruction
 from Variable import Variable
 from Frame import Frame
+from Error_enum import Error
 
 
 class Interpret:
@@ -73,7 +74,7 @@ class Interpret:
         :param value: value to be processed
         :return: processed value as bool, "nil" on bad value when reading
         """
-        return True if value == 'true' else False
+        return value.lower() == 'true'
 
     @staticmethod
     def __int(value: str, read: bool = False) -> int | str:
@@ -92,8 +93,7 @@ class Interpret:
         elif read:
             return "nil"
         else:
-            print(f"bad int value {value}", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"bad int value {value}")
 
     @staticmethod
     def __float(value: str, read: bool = False) -> float | str:
@@ -114,8 +114,7 @@ class Interpret:
         elif read:
             return "nil"
         else:
-            print(f"bad float value {value}", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"bad float value {value}")
 
     def __get_labels(self) -> Dict[str, Instruction]:
         """Yields dictionary of labels
@@ -126,7 +125,7 @@ class Interpret:
         for instruction in self.instructions:
             if instruction.opcode == 'LABEL':
                 label = instruction.args[0].text
-                labels[label] = instruction if label not in labels else sys.exit(52)
+                labels[label] = instruction if label not in labels else Error.exit(Error.Semantic_error)
         return labels
 
     @staticmethod
@@ -136,7 +135,7 @@ class Interpret:
         :param string: string to be parsed
         :return: parsed string
         """
-        return re.sub(r'\\(\d{3})', lambda x: chr(int(x.group(1))), string.replace("\n", ""))
+        return re.sub(r'\\(\d{3})', lambda x: chr(int(x.group(1))), string) if string is not None else ''
 
     @staticmethod
     def __get_type(A: Any, B: Any) -> str:
@@ -227,11 +226,11 @@ class Interpret:
             return self.global_frame
         if frame == 'LF':
             if len(self.frame_stack) == 0:
-                sys.exit(55)
+                Error.exit(Error.Frame_not_found, "LF not defined")
             return self.frame_stack[-1]
         if frame == 'TF':
             if self.temporary_frame is None:
-                sys.exit(55)
+                Error.exit(Error.Frame_not_found, "TF not defined")
             return self.temporary_frame
 
     def __instruction_args(self, instruction: Instruction,
@@ -254,20 +253,20 @@ class Interpret:
         start = 0 if first else 1
         if dest:
             if instruction.args[0].attrib['type'] != 'var' or len(instruction.args[0].text.split('@')) != 2:
-                sys.exit(53)
+                Error.exit(Error.Invalid_type, "Wrong destination variable")
             destination = \
                 self.__get_frame(instruction.args[0].text.split('@')[0]).\
                 get(instruction.args[0].text.split('@')[1]) if instruction.args[0].attrib['type'] == 'var' \
-                else sys.exit(53)
+                else Error.exit(Error.Invalid_type, "Wrong destination variable")
 
         for i in instruction.args[start:]:
             if i.attrib['type'] == 'var' and not take_type:
                 var = var if (var := self.__get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])).type != "" \
-                    else sys.exit(56)
-                arg.append(var) if limit in (var.type, "") else sys.exit(53)
+                    else Error.exit(Error.Missing_value, "Variable not initialized")
+                arg.append(var) if limit in (var.type, "") else Error.exit(Error.Invalid_type, "Wrong type")
             elif i.attrib['type'] == 'var' and take_type:
                 var = var if (var := self.__get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])) \
-                    else sys.exit(56)
+                    else Error.exit(Error.Missing_value, "Variable not initialized")
                 arg.append(var)
             elif i.attrib['type'] == 'string' and 's' in options:
                 arg.append(Variable(value=self.__parse_string(i.text), type='string'))
@@ -282,7 +281,7 @@ class Interpret:
             elif i.attrib['type'] == 'type' and 't' in options:
                 arg.append(Variable(value=i.text, type='type'))
             else:
-                sys.exit(53)
+                Error.exit(Error.Invalid_type, "Wrong type")
         return (destination, arg) if dest else arg
 
     def __get_args_stack(self,
@@ -295,12 +294,13 @@ class Interpret:
         args = []
 
         for i in range(count):
-            var = self.data_stack.pop() if len(self.data_stack) > 0 else sys.exit(56)
+            var = self.data_stack.pop() if len(self.data_stack) > 0 else\
+                Error.exit(Error.Missing_value, "Stack is empty")
 
             if var.type in limits or "" in limits:
                 args.insert(0, var)
             else:
-                sys.exit(53)
+                Error.exit(Error.Invalid_type, "Wrong type")
         return args
 
     def __move(self, instruction: Instruction) -> None:
@@ -322,7 +322,8 @@ class Interpret:
 
         Exits with 55 if temporary frame is not defined
         """
-        self.frame_stack.append(self.temporary_frame) if self.temporary_frame is not None else sys.exit(55)
+        self.frame_stack.append(self.temporary_frame) if self.temporary_frame is not None else\
+            Error.exit(Error.Frame_not_found, "TF not defined")
         self.temporary_frame = None
 
     def __popframe(self, instruction: Instruction) -> None:
@@ -330,14 +331,16 @@ class Interpret:
 
         Exits with 55 if frame stack is empty
         """
-        self.temporary_frame = self.frame_stack.pop() if len(self.frame_stack) > 0 else sys.exit(55)
+        self.temporary_frame = self.frame_stack.pop() if len(self.frame_stack) > 0 else\
+            Error.exit(Error.Frame_not_found, "Frame stack is empty")
 
     def __defvar(self, instruction: Instruction) -> None:
         """Defines variable in a frame"""
         var = instruction.args[0].text.split('@')
         if instruction.args[0].attrib['type'] != 'var' or len(var) != 2:
-            sys.exit(53)
-        self.__get_frame(var[0]).add(var[1]) if len(var) == 2 else sys.exit(52)
+            Error.exit(Error.Invalid_type, "Wrong type of a variable")
+        self.__get_frame(var[0]).add(var[1]) if len(var) == 2 else\
+            Error.exit(Error.Semantic_error, "Wrong variable name")
 
     def __call(self, instruction: Instruction) -> None:
         """Stores current instruction and jumps to label
@@ -345,7 +348,8 @@ class Interpret:
         Exits with 52 if label is not defined
         """
         label = instruction.args[0].text
-        self.call_stack.append(self.current) if label in self.labels else sys.exit(52)
+        self.call_stack.append(self.current) if label in self.labels else\
+            Error.exit(Error.Semantic_error, "Label not found")
         self.current = iter(self.instructions[self.labels[label].index:])
 
     def __return(self, instruction: Instruction) -> None:
@@ -353,7 +357,8 @@ class Interpret:
 
         Exits with 56 if call stack is empty
         """
-        self.current = self.call_stack.pop() if len(self.call_stack) > 0 else sys.exit(56)
+        self.current = self.call_stack.pop() if len(self.call_stack) > 0 else\
+            Error.exit(Error.Missing_value, "Call stack is empty")
 
     def __pushs(self, instruction: Instruction) -> None:
         """Pushes value onto data stack
@@ -368,7 +373,8 @@ class Interpret:
         Exits with 56 if data stack is empty
         """
         dest, _ = self.__instruction_args(instruction, "", dest=True)
-        popped = self.data_stack.pop() if len(self.data_stack) > 0 else sys.exit(56)
+        popped = self.data_stack.pop() if len(self.data_stack) > 0 else\
+            Error.exit(Error.Missing_value, "Stack is empty")
         dest.value, dest.type = popped.value, popped.type
 
     def __clears(self, instruction: Instruction) -> None:
@@ -382,7 +388,7 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
         if arg[0].type != arg[1].type:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.value, dest.type = arg[0].value + arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
     def __adds(self, instruction: Instruction) -> None:
@@ -392,7 +398,7 @@ class Interpret:
         """
         arg = self.__get_args_stack(2, "if")
         if arg[0].type != arg[1].type:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].value, arg[0].type = arg[0].value + arg[1].value, self.__get_type(arg[0].type, arg[1].type)
         self.data_stack.append(arg[0])
 
@@ -403,7 +409,7 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
         if arg[0].type != arg[1].type:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.value, dest.type = arg[0].value - arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
     def __subs(self, instruction: Instruction) -> None:
@@ -413,7 +419,7 @@ class Interpret:
         """
         arg = self.__get_args_stack(2, "if")
         if arg[0].type != arg[1].type:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].value, arg[0].type = arg[0].value - arg[1].value, self.__get_type(arg[0].type, arg[1].type)
         self.data_stack.append(arg[0])
 
@@ -424,7 +430,7 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
         if arg[0].type != arg[1].type:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.value, dest.type = arg[0].value * arg[1].value, self.__get_type(arg[0].type, arg[1].type)
 
     def __muls(self, instruction: Instruction) -> None:
@@ -434,7 +440,7 @@ class Interpret:
         """
         arg = self.__get_args_stack(2, "if")
         if arg[0].type != arg[1].type:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].value, arg[0].type = arg[0].value * arg[1].value, self.__get_type(arg[0].type, arg[1].type)
         self.data_stack.append(arg[0])
 
@@ -446,8 +452,9 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "if", dest=True)
         if arg[0].type != arg[1].type:
-            sys.exit(53)
-        dest.value = arg[0].value / arg[1].value if arg[1].value != 0 else sys.exit(57)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
+        dest.value = arg[0].value / arg[1].value if arg[1].value != 0 else\
+            Error.exit(Error.Invalid_value, "Dividing by zero")
         dest.type = 'float'
 
     def __divs(self, instruction: Instruction) -> None:
@@ -458,8 +465,9 @@ class Interpret:
         """
         arg = self.__get_args_stack(2, "if")
         if arg[0].type != arg[1].type:
-            sys.exit(53)
-        arg[0].value = arg[0].value / arg[1].value if arg[1].value != 0 else sys.exit(57)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
+        arg[0].value = arg[0].value / arg[1].value if arg[1].value != 0 else\
+            Error.exit(Error.Invalid_value, "Dividing by zero")
         arg[0].type = 'float'
         self.data_stack.append(arg[0])
 
@@ -470,7 +478,8 @@ class Interpret:
         Exits with 57 if dividing by zero
         """
         dest, arg = self.__instruction_args(instruction, "i", dest=True)
-        dest.value = arg[0].value // arg[1].value if arg[1].value != 0 else sys.exit(57)
+        dest.value = arg[0].value // arg[1].value if arg[1].value != 0 else\
+            Error.exit(Error.Invalid_value, "Dividing by zero")
         dest.type = 'int'
 
     def __idivs(self, instruction: Instruction) -> None:
@@ -480,7 +489,8 @@ class Interpret:
         Exits with 57 if dividing by zero
         """
         arg = self.__get_args_stack(2, "i")
-        arg[0].value = arg[0].value // arg[1].value if arg[1].value != 0 else sys.exit(57)
+        arg[0].value = arg[0].value // arg[1].value if arg[1].value != 0 else\
+            Error.exit(Error.Invalid_value, "Dividing by zero")
         arg[0].type = 'int'
         self.data_stack.append(arg[0])
 
@@ -490,7 +500,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "ibsf", dest=True)
-        dest.value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        dest.value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else\
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.type = 'bool'
 
     def __lts(self, instruction: Instruction) -> None:
@@ -499,7 +510,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         arg = self.__get_args_stack(2, "ibsf")
-        arg[0].value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        arg[0].value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else\
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].type = 'bool'
         self.data_stack.append(arg[0])
 
@@ -509,7 +521,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "ibsf", dest=True)
-        dest.value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        dest.value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else\
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.type = 'bool'
 
     def __gts(self, instruction: Instruction) -> None:
@@ -518,7 +531,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         arg = self.__get_args_stack(2, "ibsf")
-        arg[0].value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        arg[0].value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else\
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].type = 'bool'
         self.data_stack.append(arg[0])
 
@@ -537,7 +551,8 @@ class Interpret:
             dest.value = False
             return
 
-        dest.value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        dest.value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else\
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
     def __eqs(self, instruction: Instruction) -> None:
         """Compares whether arg1 and arg2 are equal and stores result in the data stack
@@ -550,13 +565,14 @@ class Interpret:
             arg[0].type = 'bool'
             self.data_stack.append(arg[0])
             return
-        if arg[0].type == 'nil' or arg[2].type == 'nil':
+        if arg[0].type == 'nil' or arg[1].type == 'nil':
             arg[0].value = False
             arg[0].type = 'bool'
             self.data_stack.append(arg[0])
             return
 
-        arg[0].value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else sys.exit(53)
+        arg[0].value = arg[0].value == arg[1].value if arg[0].type == arg[1].type else\
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].type = 'bool'
         self.data_stack.append(arg[0])
 
@@ -619,8 +635,10 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "i", dest=True)
 
-        dest.value, dest.type = \
-            chr(arg[0].value), "string" if arg[0].value < 0 or arg[0].value > 1114111 else sys.exit(58)
+        if arg[0].value < 0 or arg[0].value > 1114111:
+            Error.exit(Error.Bad_string_operation, "Int is not in range of chr()")
+
+        dest.value, dest.type = chr(arg[0].value), "string"
 
     def __int2chars(self, instruction: Instruction) -> None:
         """Converts int to char and stores result in the data stack
@@ -629,8 +647,9 @@ class Interpret:
         Exits with 58 if int is not in range of chr()
         """
         arg = self.__get_args_stack(1, "i")
-        arg[0].value, arg[0].type = \
-            chr(arg[0].value), "string" if arg[0].value < 0 or arg[0].value > 1114111 else sys.exit(58)
+        if arg[0].value < 0 or arg[0].value > 1114111:
+            Error.exit(Error.Bad_string_operation, "Int is not in range of chr()")
+        arg[0].value, arg[0].type = chr(arg[0].value), "string"
         self.data_stack.append(arg[0])
 
     def __float2int(self, instruction: Instruction) -> None:
@@ -640,7 +659,7 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "f", dest=True)
         if arg[0].type != 'float':
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         dest.value, dest.type = int(arg[0].value), "int"
 
@@ -651,7 +670,7 @@ class Interpret:
         """
         arg = self.__get_args_stack(1, "f")
         if arg[0].type != 'float':
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         arg[0].value, arg[0].type = int(arg[0].value), "int"
         self.data_stack.append(arg[0])
@@ -663,7 +682,7 @@ class Interpret:
         """
         dest, arg = self.__instruction_args(instruction, "i", dest=True)
         if arg[0].type != 'int':
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         dest.value, dest.type = float(arg[0].value), "float"
 
@@ -674,7 +693,7 @@ class Interpret:
         """
         arg = self.__get_args_stack(2, "i")
         if arg[1].type != 'int':
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         arg[0].value, arg[0].type = float(arg[1].value), "float"
         self.data_stack.append(arg[0])
@@ -685,15 +704,12 @@ class Interpret:
         Exits with 53 if types are not compatible
         Exits with 58 if index is out of range or char is not in range of ord()
         """
-        if instruction.args[0].attrib['type'] != 'var':
-            sys.exit(53)
-
         dest, arg = self.__instruction_args(instruction, "is", dest=True)
         if arg[0].type != 'string' or arg[1].type != 'int':
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         if arg[1].value < 0 or arg[1].value >= len(arg[0].value):
-            sys.exit(58)
+            Error.exit(Error.Bad_string_operation, "Index is out of range")
 
         dest.value, dest.type = ord(arg[0].value[arg[1].value]), 'int'
 
@@ -705,10 +721,10 @@ class Interpret:
         """
         arg = self.__get_args_stack(2, "is")
         if arg[0].type != 'string' or arg[1].type != 'int':
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         if arg[1].value < 0 or arg[1].value >= len(arg[0].value):
-            sys.exit(58)
+            Error.exit(Error.Bad_string_operation, "Index is out of range")
 
         arg[0].value, arg[0].type = ord(arg[0].value[arg[1].value]), 'int'
         self.data_stack.append(arg[0])
@@ -725,9 +741,9 @@ class Interpret:
             dest.value = self.__int(in_data.strip(), read=True)
             dest.type = 'int' if dest.value != "nil" else 'nil'
         elif type[0].value == 'bool':
-            dest.value, dest.type = self.__process_bool(in_data), 'bool'
+            dest.value, dest.type = self.__process_bool(in_data.strip()), 'bool'
         elif type[0].value == 'string':
-            dest.value, dest.type = self.__parse_string(in_data), 'string'
+            dest.value, dest.type = self.__parse_string(in_data.strip()), 'string'
         elif type[0].value == 'float':
             dest.value = self.__float(in_data.strip(), read=True)
             dest.type = 'float' if dest.value != "nil" else 'nil'
@@ -762,10 +778,10 @@ class Interpret:
         dest, arg = self.__instruction_args(instruction, "si", dest=True)
 
         if arg[0].type != 'string' or arg[1].type != 'int':
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         if arg[1].value < 0 or arg[1].value >= len(arg[0].value):
-            sys.exit(58)
+            Error.exit(Error.Bad_string_operation, "Index is out of range")
 
         dest.value, dest.type = arg[0].value[arg[1].value], 'string'
 
@@ -776,11 +792,13 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "is", dest=True)
-        if dest.type != 'string' or arg[0].type != 'int' or arg[1].type != 'string':
-            sys.exit(53)
+        if dest.type == '':
+            Error.exit(Error.Missing_value, "Variable is not initialized")
+        if arg[0].type != 'int' or arg[1].type != 'string' or dest.type != 'string':
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
         if len(arg[1].value) == 0 or arg[0].value < 0 or arg[0].value >= len(dest.value):
-            sys.exit(58)
+            Error.exit(Error.Bad_string_operation, "Index is out of range")
 
         dest.value = \
             "".join(list(dest.value)[:arg[0].value] + [arg[1].value[0]] + list(dest.value)[arg[0].value + 1:])
@@ -803,7 +821,7 @@ class Interpret:
         Exits with 52 if label does not exist
         """
         if instruction.args[0].text not in self.labels:
-            sys.exit(52)
+            Error.exit(Error.Semantic_error, "Label does not exist")
         self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
 
     def __jumpifeq(self, instruction: Instruction) -> None:
@@ -813,7 +831,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         if instruction.args[0].text not in self.labels:
-            sys.exit(52)
+            Error.exit(Error.Semantic_error, "Label does not exist")
         arg = self.__instruction_args(instruction, "isbnf")
 
         if arg[0].type == arg[1].type:
@@ -822,7 +840,7 @@ class Interpret:
         elif arg[0].type == 'nil' or arg[1].type == 'nil':
             pass
         else:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
     def __jumpifeqs(self, instruction: Instruction) -> None:
         """Jumps to label if values from stack are equal
@@ -831,7 +849,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         if instruction.args[0].text not in self.labels:
-            sys.exit(52)
+            Error.exit(Error.Semantic_error, "Label does not exist")
         arg = self.__get_args_stack(2, "isbnf")
 
         if arg[0].type == arg[1].type:
@@ -840,7 +858,7 @@ class Interpret:
         elif arg[0].type == 'nil' or arg[1].type == 'nil':
             pass
         else:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
     def __jumpifneq(self, instruction: Instruction) -> None:
         """Jumps to label if values are not equal
@@ -849,7 +867,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         if instruction.args[0].text not in self.labels:
-            sys.exit(52)
+            Error.exit(Error.Semantic_error, "Label does not exist")
         arg = self.__instruction_args(instruction, "isbnf")
 
         if arg[0].type == arg[1].type:
@@ -858,7 +876,7 @@ class Interpret:
         elif arg[0].type == 'nil' or arg[1].type == 'nil':
             self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
         else:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
     def __jumpifneqs(self, instruction: Instruction) -> None:
         """Jumps to label if values from stack are not equal
@@ -867,7 +885,7 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         if instruction.args[0].text not in self.labels:
-            sys.exit(52)
+            Error.exit(Error.Semantic_error, "Label does not exist")
         arg = self.__get_args_stack(2, "isbnf")
 
         if arg[0].type == arg[1].type:
@@ -876,7 +894,7 @@ class Interpret:
         elif arg[0].type == 'nil' or arg[1].type == 'nil':
             self.current = iter(self.instructions[self.labels[instruction.args[0].text].index:])
         else:
-            sys.exit(53)
+            Error.exit(Error.Invalid_type, "Wrong type combination")
 
     def __exit(self, instruction: Instruction) -> None:
         """Exits program
@@ -884,7 +902,7 @@ class Interpret:
         Exits with 57 if value is not in range 0-49
         """
         arg = self.__instruction_args(instruction, "i", first=True)
-        sys.exit(arg[0].value) if 0 <= arg[0].value <= 49 else sys.exit(57)
+        sys.exit(arg[0].value) if 0 <= arg[0].value <= 49 else Error.exit(Error.Invalid_value, "Exit code out of range")
 
     def __dprint(self, instruction: Instruction) -> None:
         """Prints value to stderr"""

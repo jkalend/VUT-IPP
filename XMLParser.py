@@ -4,6 +4,7 @@ from typing import Generator, TextIO
 from xml.etree.ElementTree import Element
 
 from argument_parse import ArgumentParser
+from Error_enum import Error
 
 
 class XMLParser:
@@ -23,17 +24,14 @@ class XMLParser:
             try:
                 return ET.fromstring(self._load_xml())
             except ET.ParseError:
-                print("Error: XML file is not valid", file=sys.stderr)
-                sys.exit(31)
+                Error.exit(Error.Invalid_XML, "XML file is not valid")
 
         try:
             return ET.parse(self.args.source[0]).getroot()
         except ET.ParseError:
-            print("Error: XML file is not valid", file=sys.stderr)
-            sys.exit(31)
+            Error.exit(Error.Invalid_XML, "XML file is not valid")
         except FileNotFoundError:
-            print("Error: XML file not found", file=sys.stderr)
-            sys.exit(11)
+            Error.exit(Error.Cant_open_file, "XML file not found")
 
     @staticmethod
     def _load_xml() -> str:
@@ -54,12 +52,10 @@ class XMLParser:
         """Checks root of XML file for validity"""
         for i in self.root.attrib:
             if i not in ["name", "description", "language"]:
-                print("bad attribute for program", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, "bad attribute for program")
 
         if "language" not in self.root.attrib or self.root.attrib["language"].lower() != "ippcode23":
-            print("language bad", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, "language not IPPcode23")
 
     def _check_instructions(self, instruction: Element) -> None:
         """Checks instructions for validity
@@ -67,14 +63,11 @@ class XMLParser:
         :param instruction: instruction to check
         """
         if instruction.tag != "instruction":
-            print("instr bad", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"wrong instruction tag {instruction.tag}")
         if "order" not in instruction.attrib or "opcode" not in instruction.attrib:
-            print("order/opcode missing", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"order/opcode missing in instruction {instruction.tag}")
         if not instruction.attrib["order"].isdigit() or int(instruction.attrib["order"]) < 0:
-            print("order not digit or negative", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"order not digit or negative in instruction {instruction.tag}")
 
         instruction.attrib["opcode"] = instruction.attrib["opcode"].upper()
 
@@ -86,32 +79,26 @@ class XMLParser:
                                                 "TYPE", "LABEL", "JUMP", "JUMPIFEQ", "JUMPIFNEQ", "JUMPIFEQS",
                                                 "JUMPIFNEQS", "EXIT", "DPRINT", "BREAK", "INT2FLOAT", "INT2FLOATS",
                                                 "FLOAT2INT", "FLOAT2INTS", "DIV", "DIVS", "CLEARS"]:
-            print("opcode bad", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"bad opcode {instruction.attrib['opcode']}")
         if instruction.attrib["opcode"] in ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK", "ADDS", "SUBS",
                                             "MULS", "IDIVS", "LTS", "GTS", "EQS", "ANDS", "ORS", "NOTS", "INT2CHARS",
                                             "STRI2INTS", "INT2FLOATS", "FLOAT2INTS", "DIVS", "CLEARS"]:
             if len(instruction) > 0:
-                print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"wrong arg count on instruction {instruction.tag}")
         if instruction.attrib["opcode"] in ["CALL", "LABEL", "JUMP", "PUSHS", "EXIT", "DPRINT",
                                             "WRITE", "DEFVAR", "POPS", "JUMPIFEQS", "JUMPIFNEQS"]:
             if len(instruction) != 1:
-                print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"wrong arg count on instruction {instruction.tag}")
         if instruction.attrib["opcode"] in ["MOVE", "INT2CHAR", "STRLEN", "TYPE",
                                             "NOT", "READ", "INT2FLOAT", "FLOAT2INT"]:
             if len(instruction) != 2:
-                print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"wrong arg count on instruction {instruction.tag}")
         if instruction.attrib["opcode"] in ["ADD", "SUB", "MUL", "IDIV", "DIV", "LT", "GT", "EQ", "AND", "OR",
                                             "STRI2INT", "CONCAT", "GETCHAR", "SETCHAR", "JUMPIFEQ", "JUMPIFNEQ"]:
             if len(instruction) != 3:
-                print(f"wrong arg count on instruction {instruction.tag}", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"wrong arg count on instruction {instruction.tag}")
         if instruction.attrib["order"] in self.orders:
-            print(f"order {instruction.attrib['order']} already used", file=sys.stderr)
-            sys.exit(32)
+            Error.exit(Error.Invalid_XML_structure, f"order {instruction.attrib['order']} already used")
         self.orders.append(instruction.attrib["order"])
 
     @staticmethod
@@ -124,25 +111,24 @@ class XMLParser:
 
         for arg in instruction:
             if len(arg.tag) < 4 or not arg.tag[3:].isnumeric() or not arg.tag.startswith("arg"):
-                print(f"bad arg tag {arg.tag}", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"bad arg tag {arg.tag}")
 
             indexes.append(int(arg.tag[3:]))
 
             if "type" not in arg.attrib:
-                print(f"type missing for arg {arg.tag}", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"type missing for arg {arg.tag}")
             if arg.attrib["type"] not in ["var", "label", "nil", "int", "bool", "string", "type", "float"]:
-                print(f"type bad for arg {arg.tag}", file=sys.stderr)
-                sys.exit(32)
-            if arg.text is None:
-                print(f"text missing for arg {arg.tag}", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"bad type {arg.attrib['type']} for arg {arg.tag}")
+            if arg.text is None and arg.attrib["type"] != "string":
+                Error.exit(Error.Invalid_XML_structure,
+                           f"text missing for arg {arg.tag} in instruction {instruction.tag}")
+
+            if arg.text is not None:
+                arg.text = arg.text.strip()
 
         for i in range(1, len(indexes) + 1):
             if i not in indexes:
-                print(f"arg {i} missing", file=sys.stderr)
-                sys.exit(32)
+                Error.exit(Error.Invalid_XML_structure, f"arg {i} missing in instruction {instruction.tag}")
 
     def get_input(self) -> TextIO:
         """Returns input file
