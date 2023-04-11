@@ -249,7 +249,10 @@ class Interpret:
         :return: list of arguments or tuple when dest is True
         """
         arg = []
-        limit = {"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float"}[options] if len(options) == 1 else ""
+        #limit = {"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float"}[options] if len(options) == 1 else ""
+        limit = []
+        for i in options:
+            limit.append({"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float", "t": "type"}[i])
         start = 0 if first else 1
         if dest:
             if instruction.args[0].attrib['type'] != 'var' or len(instruction.args[0].text.split('@')) != 2:
@@ -263,7 +266,7 @@ class Interpret:
             if i.attrib['type'] == 'var' and not take_type:
                 var = var if (var := self.__get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])).type != "" \
                     else Error.exit(Error.Missing_value, "Variable not initialized")
-                arg.append(var) if limit in (var.type, "") else Error.exit(Error.Invalid_type, "Wrong type")
+                arg.append(var) if var.type in limit else Error.exit(Error.Invalid_type, "Wrong type")
             elif i.attrib['type'] == 'var' and take_type:
                 var = var if (var := self.__get_frame(i.text.split('@')[0]).get(i.text.split('@')[1])) \
                     else Error.exit(Error.Missing_value, "Variable not initialized")
@@ -278,7 +281,7 @@ class Interpret:
                 arg.append(Variable(value=i.text, type='nil'))
             elif i.attrib['type'] == 'float' and 'f' in options:
                 arg.append(Variable(value=self.__float(i.text), type='float'))
-            elif i.attrib['type'] == 'type' and 't' in options:
+            elif i.attrib['type'] == 'type' and 't' in options and i.text in ['int', 'string', 'bool', 'float']:
                 arg.append(Variable(value=i.text, type='type'))
             else:
                 Error.exit(Error.Invalid_type, "Wrong type")
@@ -365,7 +368,8 @@ class Interpret:
 
         Exits with 56 if variable is not defined
         """
-        self.data_stack.append(self.__instruction_args(instruction, "isbnf", first=True)[0])
+        pushed = self.__instruction_args(instruction, "isbnf", first=True)[0]
+        self.data_stack.append(Variable(value=pushed.value, type=pushed.type))
 
     def __pops(self, instruction: Instruction) -> None:
         """Pops value from data stack and stores it in variable
@@ -500,6 +504,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "ibsf", dest=True)
+        if arg[0].type == arg[1].type and arg[0].type == 'nil':
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else\
             Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.type = 'bool'
@@ -510,6 +516,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         arg = self.__get_args_stack(2, "ibsf")
+        if arg[0].type == arg[1].type and arg[0].type == 'nil':
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].value = arg[0].value < arg[1].value if arg[0].type == arg[1].type else\
             Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].type = 'bool'
@@ -521,6 +529,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         dest, arg = self.__instruction_args(instruction, "ibsf", dest=True)
+        if arg[0].type == arg[1].type and arg[0].type == 'nil':
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else\
             Error.exit(Error.Invalid_type, "Wrong type combination")
         dest.type = 'bool'
@@ -531,6 +541,8 @@ class Interpret:
         Exits with 53 if types are not compatible
         """
         arg = self.__get_args_stack(2, "ibsf")
+        if arg[0].type == arg[1].type and arg[0].type == 'nil':
+            Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].value = arg[0].value > arg[1].value if arg[0].type == arg[1].type else\
             Error.exit(Error.Invalid_type, "Wrong type combination")
         arg[0].type = 'bool'
@@ -731,7 +743,10 @@ class Interpret:
 
     def __read(self, instruction: Instruction) -> None:
         """Reads input from stdin and stores it in variable"""
-        dest, type = self.__instruction_args(instruction, "it", dest=True)
+        dest, type = self.__instruction_args(instruction, "isbnft", dest=True, take_type=True)
+
+        if type[0].name != '':
+            Error.exit(Error.Invalid_XML_structure, "Wrong type combination")
 
         dest = self.__get_frame(instruction.args[0].text.split('@')[0]).get(instruction.args[0].text.split('@')[1])
         in_data = self.__process_input()
