@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from typing import Generator, TextIO
 from xml.etree.ElementTree import Element
 
-from argument_parse import ArgumentParser
+from argument_parse import ArgParser
 from Error_enum import Error
 
 
@@ -11,7 +11,7 @@ class XMLParser:
     """Class for parsing XML file"""
 
     def __init__(self):
-        self.args = ArgumentParser().parse()
+        self.args = ArgParser().parse()
         self.root = self._parse()
         self.orders = []
 

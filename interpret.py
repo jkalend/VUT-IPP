@@ -232,6 +232,8 @@ class Interpret:
             if self.temporary_frame is None:
                 Error.exit(Error.Frame_not_found, "TF not defined")
             return self.temporary_frame
+        else:
+            Error.exit(Error.Invalid_XML_structure, f"bad frame {frame}")
 
     def __instruction_args(self, instruction: Instruction,
                           options: str = "",
@@ -290,6 +292,12 @@ class Interpret:
     def __get_args_stack(self,
                          count: int = 0,
                          options: str = "") -> List[Variable]:
+        """Returns list of arguments from the stack for instruction
+
+        :param count: number of arguments to be returned
+        :param options: string of types (int, string, bool, nil, float) as isbnf
+        :return: list of arguments
+        """
         limits = []
         for i in options:
             limits.append({"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float"}[i])
