@@ -147,8 +147,6 @@ class Interpret:
         """
         if A == B:
             return A
-        elif A == 'float' or B == 'float':
-            return 'float'
 
     def __init_operations(self) -> Dict[str, Callable]:
         """Initializes dictionary of operations
@@ -237,9 +235,9 @@ class Interpret:
 
     def __instruction_args(self, instruction: Instruction,
                           options: str = "",
-                          first=False,
-                          dest=False,
-                          take_type=False) -> Tuple[Variable, List[Variable]]:
+                          first: bool = False,
+                          dest: bool = False,
+                          take_type: bool = False) -> Tuple[Variable, List[Variable]] | List[Variable]:
         """Returns list of arguments for instruction
 
         Exits with 53 if type is not compatible
@@ -251,7 +249,6 @@ class Interpret:
         :return: list of arguments or tuple when dest is True
         """
         arg = []
-        #limit = {"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float"}[options] if len(options) == 1 else ""
         limit = []
         for i in options:
             limit.append({"s": "string", "i": "int", "b": "bool", "n": "nil", "f": "float", "t": "type"}[i])

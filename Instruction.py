@@ -6,7 +6,7 @@ from Error_enum import Error
 class Instruction:
     """Class for storing instruction"""
 
-    def __init__(self, instruction, index):
+    def __init__(self, instruction: Element, index: int):
         self.instruction = instruction
         self.opcode = instruction.attrib['opcode']
         self.args = self._get_args(instruction)
