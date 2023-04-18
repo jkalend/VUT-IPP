@@ -1,3 +1,7 @@
+# IPP 2023 project 2
+# Author: Jan Kalenda
+# Login: xkalen07
+
 from xml.etree.ElementTree import Element
 from typing import List
 

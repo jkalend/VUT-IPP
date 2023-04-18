@@ -1,3 +1,7 @@
+# IPP 2023 project 2
+# Author: Jan Kalenda
+# Login: xkalen07
+
 from enum import IntEnum
 import sys
 

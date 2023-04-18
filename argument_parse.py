@@ -1,3 +1,7 @@
+# IPP 2023 project 2
+# Author: Jan Kalenda
+# Login: xkalen07
+
 import argparse
 import sys
 from typing import NoReturn
@@ -26,9 +30,6 @@ class ArgParser(argparse.ArgumentParser):
             args = self.parse_args()
         except argparse.ArgumentError:
             Error.exit(Error.Missing_parameter, "Invalid argument")
-        # for i in args.__dict__.keys():
-        #     if i not in ["source", "input", "help"]:
-        #         Error.exit(Error.Missing_parameter, f"Invalid argument {i}")
 
         if args.help and args.source is None and args.input is None:
             self.print_help()

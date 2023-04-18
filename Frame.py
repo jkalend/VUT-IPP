@@ -1,3 +1,7 @@
+# IPP 2023 project 2
+# Author: Jan Kalenda
+# Login: xkalen07
+
 from Variable import Variable
 
 from Error_enum import Error
